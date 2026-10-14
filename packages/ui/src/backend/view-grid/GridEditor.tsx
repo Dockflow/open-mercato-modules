@@ -83,9 +83,11 @@ export type GridEditorProps<T extends W> = {
    * table). Its tile has no ×, and its section no "delete section".
    */
   locked?: (widget: T) => boolean
+  /** The widest a section may be (a narrow host — a task's context panel: 2). Default 6. */
+  maxColumns?: number
 }
 
-export function GridEditor<T extends W>({ sections: given, onChange, name, options, create, tileBody, spans = false, locked }: GridEditorProps<T>) {
+export function GridEditor<T extends W>({ sections: given, onChange, name, options, create, tileBody, spans = false, locked, maxColumns = 6 }: GridEditorProps<T>) {
   const t = useT()
   const set = onChange
   const isLocked = (widget: T) => Boolean(locked?.(widget))
@@ -371,7 +373,7 @@ export function GridEditor<T extends W>({ sections: given, onChange, name, optio
               <strong className="min-w-0 flex-1 text-body-medium-sm text-m3ft-on-surface">{t('split_views.grid.sectionN', 'Sekcja {n}', { n: si + 1 })}</strong>
               {flow ? <span className="text-body-regular-sm text-m3ft-on-surface-variant">{t('split_views.grid.columns', 'Kolumny')}</span> : null}
               <span role="group" aria-label={t('split_views.grid.slotsInRow', 'Sloty w rzędzie — sekcja {n}', { n: si + 1 })} className="inline-flex rounded-[10px] border border-m3ft-outline-variant p-0.5">
-                {GRID_COLUMNS.map((n) => (
+                {GRID_COLUMNS.filter((n) => n <= maxColumns).map((n) => (
                   <button
                     key={n}
                     type="button"
@@ -449,7 +451,7 @@ export function GridEditor<T extends W>({ sections: given, onChange, name, optio
           </section>
         )
       })}
-      <AddSection testId="grid-editor-add-section" onAdd={(columns) => set(inViewDensity(sections, addSection(sections, gridId('section'), columns)))} />
+      <AddSection testId="grid-editor-add-section" maxColumns={maxColumns} onAdd={(columns) => set(inViewDensity(sections, addSection(sections, gridId('section'), columns)))} />
     </div>
   )
 }

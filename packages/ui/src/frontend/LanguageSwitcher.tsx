@@ -11,7 +11,8 @@ export function LanguageSwitcher() {
   const [pending, startTransition] = useTransition()
   const selectId = useId()
 
-  const languageLabels: Record<Locale, string> = {
+  // The languages FMS offers. Open Mercato 0.9.0 also ships `ko`; it is left out of the switcher.
+  const languageLabels: Partial<Record<Locale, string>> = {
     en: t('common.languages.english', 'English'),
     pl: t('common.languages.polish', 'Polski'),
     es: t('common.languages.spanish', 'Español'),
@@ -49,7 +50,7 @@ export function LanguageSwitcher() {
           onChange={(event) => setLocale(event.target.value as Locale)}
           disabled={pending}
         >
-          {locales.map((locale) => (
+          {locales.filter((locale) => languageLabels[locale] !== undefined).map((locale) => (
             <option key={locale} value={locale}>
               {languageLabels[locale]}
             </option>

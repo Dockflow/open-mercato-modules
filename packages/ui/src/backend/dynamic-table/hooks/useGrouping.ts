@@ -10,6 +10,8 @@ import type {
 } from '../types/grouping';
 
 export interface UseGroupingOptions {
+  /** Every group starts folded (until the user opens one). */
+  startCollapsed?: boolean;
   /**
    * Total number of rows in the FILTERED DATASET, as reported by the server.
    *
@@ -244,7 +246,7 @@ export function useGrouping(
   aggregations: AggregationRule[] = [],
   options: UseGroupingOptions = {},
 ): UseGroupingResult {
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set(options.startCollapsed ? ['__collapse_all__'] : []));
   const { totalRows } = options;
 
   // The loaded page is the whole dataset only when the server told us how many
@@ -381,7 +383,8 @@ export function useGrouping(
     buildGroups(allIndices, groupRules, 0, '');
 
     // Handle "collapse all" sentinel
-    if (collapsedGroups.has('__collapse_all__')) {
+    // Wait for groups to exist: rows that arrive after the first render must still start folded.
+    if (collapsedGroups.has('__collapse_all__') && allGroupKeys.length > 0) {
       setCollapsedGroups(new Set(allGroupKeys));
     }
 

@@ -13,9 +13,17 @@ import { parseFormulaColumns } from './formulaColumns'
 import { parseRollupColumns } from './rollupColumns'
 import type {
   PerspectiveDto,
-  PerspectiveSettings,
+  PerspectiveSettings as SharedPerspectiveSettings,
   RolePerspectiveDto,
 } from '@open-mercato/shared/modules/perspectives/types'
+
+/**
+ * Row grouping is this table's addition: Open Mercato's settings type does not carry it
+ * (FMS patches @open-mercato/shared to validate and persist it).
+ */
+type PerspectiveSettings = SharedPerspectiveSettings & {
+  grouping?: Array<{ id: string; field: string; desc?: boolean }>
+}
 
 /**
  * @deprecated Collapsed: `PerspectiveConfig` now carries `conditionalFormats`
@@ -215,7 +223,7 @@ export function apiToDynamicTable(
     direction: (s.desc ? 'desc' : 'asc') as 'asc' | 'desc',
   }))
 
-  const grouping: GroupRule[] = (dto.settings.grouping ?? []).map((g) => ({
+  const grouping: GroupRule[] = ((dto.settings as PerspectiveSettings).grouping ?? []).map((g) => ({
     id: g.id,
     field: g.field,
     direction: (g.desc ? 'desc' : 'asc') as 'asc' | 'desc',

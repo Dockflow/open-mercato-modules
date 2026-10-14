@@ -15,7 +15,7 @@ const chip =
   'hover:bg-m3ft-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-m3ft-outline disabled:opacity-40'
 
 /** "Ile slotów w rzędzie?" 1–6 — a new section's column count. */
-export function ColumnChoice({ onPick, onCancel, label }: { onPick: (n: GridColumns) => void; onCancel: () => void; label: string }) {
+export function ColumnChoice({ onPick, onCancel, label, maxColumns = 6 }: { onPick: (n: GridColumns) => void; onCancel: () => void; label: string; maxColumns?: number }) {
   const t = useT()
   return (
     <span
@@ -26,7 +26,7 @@ export function ColumnChoice({ onPick, onCancel, label }: { onPick: (n: GridColu
         if (e.key === 'Escape') onCancel()
       }}
     >
-      {GRID_COLUMNS.map((n) => (
+      {GRID_COLUMNS.filter((n) => n <= maxColumns).map((n) => (
         <button key={n} type="button" className={chip} onClick={() => onPick(n)} aria-label={t('split_views.grid.sectionSlots', 'Sekcja: {n} slotów', { n })} data-testid={`grid-columns-${n}`}>
           {n}
         </button>
@@ -39,7 +39,7 @@ export function ColumnChoice({ onPick, onCancel, label }: { onPick: (n: GridColu
 }
 
 /** The dashed "Dodaj sekcję" bar; a click asks how many slots the row has. */
-export function AddSection({ onAdd, testId = 'grid-add-section' }: { onAdd: (columns: GridColumns) => void; testId?: string }) {
+export function AddSection({ onAdd, testId = 'grid-add-section', maxColumns = 6 }: { onAdd: (columns: GridColumns) => void; testId?: string; maxColumns?: number }) {
   const t = useT()
   const [choosing, setChoosing] = React.useState(false)
   return (
@@ -51,6 +51,7 @@ export function AddSection({ onAdd, testId = 'grid-add-section' }: { onAdd: (col
         <>
           <span>{t('split_views.grid.howManySlots', 'Ile slotów w rzędzie?')}</span>
           <ColumnChoice
+            maxColumns={maxColumns}
             label={t('split_views.grid.newSection', 'Nowa sekcja — ile slotów w rzędzie')}
             onPick={(n) => {
               onAdd(n)

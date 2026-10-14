@@ -31,7 +31,18 @@ interface GroupHeaderRowProps {
   formatGroupValue?: (ctx: { field: string; value: string; count: number }) => string | undefined;
   /** Host actions for this group (`uiConfig.groupRowActions`), already resolved. */
   actions?: GroupRowAction[];
+  /** Only the group's value — no field label, no count (`uiConfig.groupHeaderMinimal`). */
+  minimal?: boolean;
 }
+
+/** Looks of a host action by its variant — inline, so the v1 and v2 stylesheets need nothing new. */
+const ACTION_STYLE: Record<NonNullable<GroupRowAction['variant']>, React.CSSProperties | undefined> = {
+  text: undefined,
+  note: { fontSize: 12, fontWeight: 400, color: 'var(--m3-on-surface-variant, #5f6368)', whiteSpace: 'nowrap' },
+  link: { fontSize: 12, fontWeight: 400, color: 'var(--m3-on-surface-variant, #5f6368)', textDecoration: 'underline', textUnderlineOffset: 2, background: 'transparent', cursor: 'pointer', padding: '0 4px', whiteSpace: 'nowrap' },
+  outlined: { height: 26, padding: '0 10px', borderRadius: 999, border: '1px solid var(--m3-outline-variant, #c4c7c5)', fontSize: 12, fontWeight: 600, color: 'var(--m3-on-surface, #1f1f1f)', background: 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' },
+  filled: { height: 26, padding: '0 12px', borderRadius: 999, border: 'none', fontSize: 12, fontWeight: 600, color: 'var(--m3-surface, #fff)', background: 'var(--m3-on-surface, #1f1f1f)', cursor: 'pointer', whiteSpace: 'nowrap' },
+};
 
 const GroupHeaderRow: React.FC<GroupHeaderRowProps> = memo(({
   visualRow,
@@ -45,6 +56,7 @@ const GroupHeaderRow: React.FC<GroupHeaderRowProps> = memo(({
   onToggleSelect,
   formatGroupValue,
   actions,
+  minimal,
 }) => {
   const t = useT();
   const fieldLabel = columns.find(c => c.data === visualRow.field)?.title || visualRow.field;
@@ -112,7 +124,7 @@ const GroupHeaderRow: React.FC<GroupHeaderRowProps> = memo(({
           ) : (
             <ChevronDown className="hot-group-header-chevron" />
           )}
-          <span className="hot-group-header-field">{fieldLabel}</span>
+          {minimal ? null : <span className="hot-group-header-field">{fieldLabel}</span>}
           <span className="hot-group-header-value">
             {formatGroupValue?.({
               field: visualRow.field,
@@ -120,25 +132,33 @@ const GroupHeaderRow: React.FC<GroupHeaderRowProps> = memo(({
               count: visualRow.count,
             }) ?? visualRow.value}
           </span>
-          <span className="hot-group-header-count">{visualRow.count}</span>
+          {minimal ? null : <span className="hot-group-header-count">{visualRow.count}</span>}
           {actions && actions.length > 0 && (
-            <span className="hot-group-header-actions" data-group-actions="">
-              {actions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  className="hot-group-header-action"
-                  data-group-action={action.id}
-                  // The heading toggles the group on click; an action must not.
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    action.onClick();
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  {action.label}
-                </button>
-              ))}
+            <span className="hot-group-header-actions" data-group-actions="" style={{ alignItems: 'center' }}>
+              {actions.map((action) =>
+                action.variant === 'note' ? (
+                  <span key={action.id} className="hot-group-header-note" data-group-note={action.id} style={ACTION_STYLE.note}>
+                    {action.label}
+                  </span>
+                ) : (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className={action.variant && action.variant !== 'text' ? undefined : 'hot-group-header-action'}
+                    data-group-action={action.id}
+                    data-variant={action.variant ?? 'text'}
+                    style={ACTION_STYLE[action.variant ?? 'text']}
+                    // The heading toggles the group on click; an action must not.
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      action.onClick?.();
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    {action.label}
+                  </button>
+                ),
+              )}
             </span>
           )}
         </div>

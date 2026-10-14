@@ -740,6 +740,10 @@ export interface TableUIConfig {
    * the group, nested sub-groups included. Return `[]` for none.
    */
   groupRowActions?: (ctx: GroupRowActionContext) => GroupRowAction[];
+  /** Groups start folded: only their headings show until one is opened (FMS: Monitoring by client). */
+  groupsStartCollapsed?: boolean;
+  /** A group heading shows only its value — no field label, no row count (the host's note says it). */
+  groupHeaderMinimal?: boolean;
   /** Enable fullscreen toggle button. Default: false */
   enableFullscreen?: boolean;
   /** Callback when fullscreen state changes */
@@ -1248,5 +1252,12 @@ export interface GroupRowActionContext {
 export interface GroupRowAction {
   id: string;
   label: string;
-  onClick: () => void;
+  /** Not given for a `note`. */
+  onClick?: () => void;
+  /**
+   * `text` (default) — a small text button; `link` — underlined, quiet ("WIN/2026/0018 ›");
+   * `outlined` / `filled` — a pill button for the group's one action; `note` — plain text, no button
+   * ("6 faktur · do zapłaty 69 400 PLN").
+   */
+  variant?: 'text' | 'link' | 'outlined' | 'filled' | 'note';
 }

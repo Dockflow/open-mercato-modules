@@ -647,6 +647,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     searchPlaceholder,
     formatGroupValue,
     groupRowActions,
+    groupsStartCollapsed = false,
+    groupHeaderMinimal = false,
     hideSearch = false,
     hideAddRowButton = false,
     hidePerspectiveTabs: hidePerspectiveTabsExplicit,
@@ -1125,6 +1127,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   // the whole filtered dataset.
   const groupingResult = useGrouping(data, groupRules, cols, aggregations, {
     totalRows: pagination?.total,
+    startCollapsed: groupsStartCollapsed,
   });
   const isGrouped = groupingResult.visualRows !== null;
 
@@ -4322,6 +4325,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
                           someSelected={groupSomeSelected}
                           onToggleSelect={() => handleToggleGroupSelect(groupRowIds)}
                           formatGroupValue={formatGroupValue}
+                          minimal={groupHeaderMinimal}
                           actions={groupRowActions?.({
                             field: vr.field,
                             value: vr.value,

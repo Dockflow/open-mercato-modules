@@ -20,12 +20,14 @@ export type ProfileDropdownProps = {
   notificationsHref?: string
 }
 
-const localeLabels: Record<Locale, string> = {
+// The languages FMS offers. Open Mercato 0.9.0 also ships `ko`; it is left out of the switcher.
+const localeLabels: Partial<Record<Locale, string>> = {
   en: 'English',
   de: 'Deutsch',
   es: 'Español',
   pl: 'Polski',
 }
+const offeredLocales = locales.filter((locale) => localeLabels[locale] !== undefined)
 
 export function ProfileDropdown({
   email,
@@ -252,7 +254,7 @@ export function ProfileDropdown({
             </Button>
             {languageOpen && (
               <div className="mt-1 ml-6 space-y-0.5 border-l pl-2">
-                {locales.map((locale) => (
+                {offeredLocales.map((locale) => (
                   <Button
                     key={locale}
                     type="button"
