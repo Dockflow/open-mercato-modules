@@ -59,11 +59,15 @@ export class EvergreenAdapter implements CarrierAdapter {
         const auth = getAuth(input.authConfig)
         const token = await authenticate(auth)
         const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
-        const baseUrl = input.apiEndpoint ? `${input.apiEndpoint}apimg/tnt/v2/events` : null
-        if (!baseUrl) {
-          throw new Error('Evergreen requires apiEndpoint to be configured')
+        // `apiEndpoint` is the FULL Track & Trace events URL (every other carrier
+        // adapter treats it the same way) — not a host base. Do NOT append a path:
+        // a configured full URL would double-append (…/apimg/tnt/v2/events +
+        // apimg/tnt/v2/events → 404). Onboarding gives e.g.
+        // https://qaews.switch-hub.com/server/sol/apimg/tnt/v2/events
+        if (!input.apiEndpoint) {
+          throw new Error('Evergreen requires apiEndpoint to be configured (the full Track & Trace events URL from onboarding, e.g. https://qaews.switch-hub.com/server/sol/apimg/tnt/v2/events)')
         }
-        const url = `${baseUrl}?${params}`
+        const url = `${input.apiEndpoint}?${params}`
 
         const response = await fetch(url, {
           headers: {
