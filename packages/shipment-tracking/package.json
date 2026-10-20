@@ -1,6 +1,6 @@
 {
   "name": "@freighttech/shipment-tracking",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "type": "module",
   "license": "MIT",
   "publishConfig": {
