@@ -14,6 +14,7 @@ import { deriveShipmentStatus, deriveAirShipmentStatus } from '../lib/status-mac
 import { extractShipmentTimes } from '../lib/time-extraction'
 import { generatePollSchedule, getNextPollDate } from '../lib/schedule-generator'
 import type { CarrierFetchedEvent } from '../lib/carrier-adapter'
+import { CarrierReferenceNotFoundError } from '../lib/carrier-adapter'
 import { mapDcsaEventToWebhookType, isSignificantMilestone } from '../lib/dcsa-event-mapping'
 import { inferRouteFromEvents } from '../lib/route-inference'
 import { allContainersComplete, destinationArrivedBefore, staleArrivalCutoff } from '../lib/empty-return'
@@ -24,6 +25,20 @@ import { buildLocationFromEvent, createBasicLocation, mergeLocationWithBicData, 
 import type { FacilityLocation } from '../lib/location-types'
 import { BicApiClient, type BicFacility } from '../lib/bic-api-client'
 import { applyLocationOverrideIfExists } from '../lib/location-overrides'
+
+/**
+ * Reference-not-found thresholds (env-overridable). A job is flagged after this
+ * many consecutive carrier not-founds, OR when it has stayed active past the age
+ * guard with zero events (the silent 200-+-[] shape). The age guard tolerates the
+ * real gap before a carrier registers a brand-new booking, so fresh bookings
+ * don't false-alarm.
+ */
+const REFERENCE_NOT_FOUND_POLL_THRESHOLD = Math.max(
+  1,
+  Number(process.env.ST_REFERENCE_NOT_FOUND_POLL_THRESHOLD ?? 3) || 3,
+)
+const REFERENCE_NOT_FOUND_AGE_MS =
+  (Math.max(1, Number(process.env.ST_REFERENCE_NOT_FOUND_AGE_HOURS ?? 48) || 48)) * 60 * 60 * 1000
 
 /**
  * Provider-agnostic summary of a poll's top-level references, threaded from the
@@ -357,6 +372,11 @@ export class TrackingService {
           await this.recordTransientBackoff(em, job, error.message, 30 * 60 * 1000)
           return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
         }
+        // Unknown reference → mark not-found, don't burn the retry budget.
+        if (error instanceof CarrierReferenceNotFoundError) {
+          await this.recordReferenceNotFound(em, job, error.message)
+          return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
+        }
         const message = error instanceof Error ? error.message : 'Unknown ShipsGo fetch error'
         await this.recordJobError(em, job, message)
         return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
@@ -418,6 +438,13 @@ export class TrackingService {
           bolNumber: result.bolNumber,
         }
       } catch (error) {
+        // Carrier positively does not know this reference → mark not-found and
+        // stop here. Crucially NOT routed through recordJobError, which would
+        // retry→'failed' after ~10 polls and hide the real cause from operators.
+        if (error instanceof CarrierReferenceNotFoundError) {
+          await this.recordReferenceNotFound(em, job, error.message)
+          return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
+        }
         const message = error instanceof Error ? error.message : 'Unknown fetch error'
         await this.recordJobError(em, job, message)
         return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
@@ -572,6 +599,13 @@ export class TrackingService {
     job.lastPollAt = new Date()
     job.retryCount = 0
     await em.flush()
+
+    // Reference-not-found bookkeeping on the SUCCESS path.
+    //  - Any fetched events ⇒ the reference is real; clear a prior not-found mark.
+    //  - No events ever, and the job is older than the age guard ⇒ this is the
+    //    SILENT not-found shape (carrier returns 200 + []), which never throws
+    //    and so never reaches recordReferenceNotFound. Raise the signal once.
+    await this.reconcileReferenceNotFoundOnSuccess(em, job, fetchedEvents.length > 0)
 
     // Emit events for each new tracking event
     for (const event of newEvents) {
@@ -1737,6 +1771,76 @@ export class TrackingService {
   /** ShipsGo credit-exhaustion (HTTP 402): back off ~6h until credits are topped up. */
   private async recordCreditExhaustion(em: EntityManager, job: TrackingJob): Promise<void> {
     await this.recordTransientBackoff(em, job, 'ShipsGo credits exhausted (HTTP 402)', 6 * 60 * 60 * 1000)
+  }
+
+  /**
+   * Records a carrier "reference not found" on a job WITHOUT touching retryCount
+   * or flipping it to 'failed' (that is for transport/transient faults). A bad
+   * reference is a permanent, operator-fixable condition: we stamp
+   * `notFoundSince`/`notFoundCount` and, once `notFoundCount` reaches the
+   * threshold, emit `tracking_job.reference_not_found` exactly once (on the
+   * crossing poll). Scheduling is left to the poller, as with recordJobError.
+   */
+  private async recordReferenceNotFound(
+    em: EntityManager,
+    job: TrackingJob,
+    message: string,
+  ): Promise<void> {
+    const history = job.errorHistory ?? []
+    history.push({ date: new Date().toISOString(), message: `reference not found: ${message}` })
+    if (history.length > 20) history.splice(0, history.length - 20)
+    job.errorHistory = history
+    job.lastPollAt = new Date()
+    if (!job.notFoundSince) job.notFoundSince = new Date()
+    job.notFoundCount = (job.notFoundCount || 0) + 1
+    const crossed = job.notFoundCount === REFERENCE_NOT_FOUND_POLL_THRESHOLD
+    await em.flush()
+    if (crossed) await this.emitReferenceNotFound(job)
+  }
+
+  /**
+   * SUCCESS-path reconciliation of the not-found state. Called after every
+   * non-throwing poll:
+   *  - `gotEvents` ⇒ the reference is real; clear any prior not-found mark.
+   *  - otherwise, if the job is still active, has never produced an event, and
+   *    is older than the age guard ⇒ this is the SILENT not-found (carrier
+   *    returns 200 + []). Stamp `notFoundSince` and emit once.
+   */
+  private async reconcileReferenceNotFoundOnSuccess(
+    em: EntityManager,
+    job: TrackingJob,
+    gotEvents: boolean,
+  ): Promise<void> {
+    if (gotEvents) {
+      if (job.notFoundSince || job.notFoundCount) {
+        job.notFoundSince = null
+        job.notFoundCount = 0
+        await em.flush()
+      }
+      return
+    }
+    if (job.status !== 'active' || job.notFoundSince) return
+    const ageMs = job.createdAt ? Date.now() - job.createdAt.getTime() : 0
+    if (ageMs < REFERENCE_NOT_FOUND_AGE_MS) return
+    const eventCount = await em.count(TrackingEvent, { trackingJob: job.id })
+    if (eventCount > 0) return
+    job.notFoundSince = new Date()
+    await em.flush()
+    await this.emitReferenceNotFound(job)
+  }
+
+  /** Emits the once-per-transition reference-not-found signal. */
+  private async emitReferenceNotFound(job: TrackingJob): Promise<void> {
+    await this.deps.eventBus.emit('shipment_tracking.tracking_job.reference_not_found', {
+      id: job.id,
+      carrierCode: job.carrierCode,
+      referenceType: job.referenceType,
+      referenceValue: job.referenceValue,
+      notFoundCount: job.notFoundCount,
+      notFoundSince: job.notFoundSince ? job.notFoundSince.toISOString() : null,
+      tenantId: job.tenantId,
+      organizationId: job.organizationId,
+    })
   }
 
   private async recordJobError(

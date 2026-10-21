@@ -77,6 +77,11 @@ const events = [
   { id: 'shipment_tracking.tracking_job.updated', label: 'Tracking Job Updated', entity: 'tracking_job', category: 'crud', excludeFromTriggers: true },
   { id: 'shipment_tracking.tracking_job.failed', label: 'Tracking Job Failed', entity: 'tracking_job', category: 'lifecycle', excludeFromTriggers: true },
   { id: 'shipment_tracking.tracking_job.completed', label: 'Tracking Job Completed', entity: 'tracking_job', category: 'lifecycle', excludeFromTriggers: true },
+  // Raised once when a job's reference looks invalid: N consecutive carrier
+  // not-founds, OR active + older than the age guard with zero events. A bad
+  // reference (BOL typed as booking, house number) lands here instead of dying
+  // silently at retry 10. Consumers surface it where the operator can fix it.
+  { id: 'shipment_tracking.tracking_job.reference_not_found', label: 'Tracking Job Reference Not Found', entity: 'tracking_job', category: 'lifecycle', excludeFromTriggers: true },
 
   // Webhook delivery - internal infrastructure events
   { id: 'shipment_tracking.webhook.delivery_success', label: 'Webhook Delivery Success', entity: 'webhook_delivery', category: 'lifecycle', excludeFromTriggers: true },
