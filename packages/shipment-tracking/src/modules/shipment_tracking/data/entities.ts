@@ -65,7 +65,7 @@ export type FacilityCodeListProvider = 'SMDG' | 'BIC'
 @Index({ name: 'st_jobs_status_idx', properties: ['status'] })
 @Index({ name: 'st_jobs_next_poll_idx', properties: ['nextPollAt'] })
 export class TrackingJob {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'retryCount' | 'originUnlocode' | 'destinationUnlocode' | 'provider' | 'mode'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'retryCount' | 'originUnlocode' | 'destinationUnlocode' | 'provider' | 'mode' | 'notFoundCount'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -126,6 +126,17 @@ export class TrackingJob {
 
   @Property({ name: 'error_history', type: 'jsonb', nullable: true })
   errorHistory?: Array<{ date: string; message: string }> | null
+
+  // Carrier-reference-not-found tracking. Set on the first consecutive not-found
+  // poll (a thrown CarrierReferenceNotFoundError OR the silent 0-events/age
+  // guard), cleared on any poll that returns events. A bad reference (BOL typed
+  // as booking, house number handed to the carrier) sits here instead of being
+  // retried to 'failed' silently. See trackingService.recordReferenceNotFound.
+  @Property({ name: 'not_found_since', type: Date, nullable: true })
+  notFoundSince?: Date | null
+
+  @Property({ name: 'not_found_count', type: 'integer', default: 0 })
+  notFoundCount: number = 0
 
   @Property({ name: 'created_at', type: Date, defaultRaw: 'now()' })
   createdAt!: Date

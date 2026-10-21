@@ -3,6 +3,41 @@ import type { SealInfo } from './route-extraction'
 
 export type { SealInfo } from './route-extraction'
 
+/**
+ * Thrown by an adapter when the carrier positively does NOT recognise the
+ * reference (e.g. HTTP 404, or a documented "unknown shipment" body) — as
+ * opposed to a transport/5xx/auth error. The poll loop treats this as a
+ * permanent condition: it does NOT burn the per-job retry budget (which would
+ * silently flip the job to 'failed' after ~10 polls) and instead marks the job
+ * with `notFoundSince`/`notFoundCount` and raises
+ * `shipment_tracking.tracking_job.reference_not_found` once the threshold trips.
+ *
+ * NOTE for adapter authors: a KNOWN reference with nothing new must return
+ * `{ events: [] }` (success). Only an UNKNOWN reference may throw this.
+ */
+export class CarrierReferenceNotFoundError extends Error {
+  readonly carrierCode: string
+  readonly referenceType: string
+  readonly referenceValue: string
+  constructor(args: { carrierCode: string; referenceType: string; referenceValue: string; message?: string }) {
+    super(
+      args.message ??
+        `${args.carrierCode}: reference not found (${args.referenceType} ${args.referenceValue})`,
+    )
+    this.name = 'CarrierReferenceNotFoundError'
+    this.carrierCode = args.carrierCode
+    this.referenceType = args.referenceType
+    this.referenceValue = args.referenceValue
+  }
+}
+
+/** Result of a per-carrier reference-format check (soft, non-blocking). */
+export type ReferenceValidationResult = {
+  ok: boolean
+  /** Human hint when `ok` is false, e.g. "looks like a house BL, not an MSC reference". */
+  hint?: string
+}
+
 export type DocumentReference = {
   type: string // BKG, TRD, SHI, CBR, ARN, VGM, etc.
   value: string
@@ -128,6 +163,17 @@ export interface CarrierAdapter {
     apiEndpoint?: string | null
     authConfig?: Record<string, unknown> | null
   }): Promise<CarrierFetchResult>
+
+  /**
+   * Optional, synchronous, offline reference-format check. Lets callers warn an
+   * operator BEFORE a job is created when a value clearly isn't this carrier's
+   * own reference (e.g. a house `SBLNGB…` number handed to MSC). Soft only —
+   * never blocks. Omit when the carrier has no stable format.
+   */
+  validateReference?(input: {
+    referenceType: TrackingReferenceType
+    referenceValue: string
+  }): ReferenceValidationResult
 
   testConnection(input: {
     apiEndpoint?: string | null

@@ -3,8 +3,8 @@ import fs, { writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import type { CarrierAdapter, CarrierFetchResult, CarrierAdapterTestResult } from '../carrier-adapter'
-import { extractDocumentReferences } from '../carrier-adapter'
+import type { CarrierAdapter, CarrierFetchResult, CarrierAdapterTestResult, ReferenceValidationResult } from '../carrier-adapter'
+import { extractDocumentReferences, CarrierReferenceNotFoundError } from '../carrier-adapter'
 import type { TrackingReferenceType } from '../../data/entities'
 import { base64UrlEncode } from '../auth/base64url'
 import { buildDcsaQueryParams } from '../dcsa-params'
@@ -192,6 +192,17 @@ export class MscAdapter implements CarrierAdapter {
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => 'unknown')
+          // 404 = MSC does not know this reference (a permanent, operator-fixable
+          // condition), NOT a transport fault. Surface it as such so the poll
+          // loop marks the job instead of retrying it to 'failed'.
+          if (response.status === 404) {
+            throw new CarrierReferenceNotFoundError({
+              carrierCode: this.carrierCode,
+              referenceType: input.referenceType,
+              referenceValue: input.referenceValue,
+              message: `MSC API 404 for ${input.referenceType} ${input.referenceValue}`,
+            })
+          }
           throw new Error(`MSC API error (${response.status}): ${errorText}`)
         }
 
@@ -204,6 +215,29 @@ export class MscAdapter implements CarrierAdapter {
         return { events, bookingNumber, bolNumber }
       },
     )
+  }
+
+  validateReference(input: {
+    referenceType: TrackingReferenceType
+    referenceValue: string
+  }): ReferenceValidationResult {
+    const v = (input.referenceValue ?? '').trim().toUpperCase()
+    if (!v) return { ok: false, hint: 'Empty reference.' }
+    if (input.referenceType === 'container') {
+      return /^[A-Z]{4}\d{7}$/.test(v)
+        ? { ok: true }
+        : { ok: false, hint: 'A container number is ISO 6346: 4 letters + 7 digits (e.g. MSMU5799679).' }
+    }
+    // bol / booking: MSC's own references carry the MEDU prefix, or are a numeric
+    // booking number. A forwarder's house/seaway BL (e.g. SBLNGB…) is not known
+    // to MSC and can never be tracked here.
+    const looksMsc = v.startsWith('MEDU') || /^\d{6,}$/.test(v)
+    return looksMsc
+      ? { ok: true }
+      : {
+          ok: false,
+          hint: `"${input.referenceValue}" doesn't look like an MSC ${input.referenceType} (expected MEDU… or a numeric booking). A house/seaway BL can't be tracked at MSC.`,
+        }
   }
 
   async testConnection(input: {
