@@ -54,15 +54,31 @@ const OPERATOR_FALLBACKS: Record<string, string> = (() => {
 
 type Translate = ReturnType<typeof useT>;
 
+/**
+ * A filter value as the column shows it: its label from the column's `source` ({ value, label } options), else the
+ * value itself. FMS acc-v17 F3.07 (22.10): the invoice list's "Sprzedaż wg rodzaju" view read "Typ outgoing" and
+ * "Kolejka KSeF to_send" — the codes the filter keeps — in a Polish screen whose cells say "Przychód", "Do wysłania".
+ */
+export function filterValueLabel(column: Pick<ColumnDef, 'source'> | undefined, value: string): string {
+  const options = Array.isArray(column?.source) ? column!.source : [];
+  for (const option of options) {
+    if (option && typeof option === 'object' && 'value' in option && String((option as { value: unknown }).value) === value) {
+      const label = (option as { label?: unknown }).label;
+      return label == null || label === '' ? value : String(label);
+    }
+  }
+  return value;
+}
+
 /** What the chip says after the field name. Never longer than the chip. */
-function ruleSummary(t: Translate, rule: FilterRow): string {
+function ruleSummary(t: Translate, rule: FilterRow, column?: ColumnDef): string {
   const operatorLabel = t(
     `dynamicTable.filter.operator.${rule.operator}`,
     OPERATOR_FALLBACKS[rule.operator] ?? rule.operator,
   );
   // Value-less operators ("is empty", "overdue") ARE the summary.
   if (!needsValueInput(rule.operator as FilterOperator)) return operatorLabel;
-  const values = (rule.values ?? []).map((v) => String(v ?? '')).filter(Boolean);
+  const values = (rule.values ?? []).map((v) => String(v ?? '')).filter(Boolean).map((v) => filterValueLabel(column, v));
   // A rule the user opened but never filled still narrows nothing — say so
   // rather than showing an empty chip that looks like a rendering bug.
   if (values.length === 0) return t('dynamicTable.filter.anyValue', 'any');
@@ -76,8 +92,9 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({ filters, c
   return (
     <div className="hot-filter-chips" role="list" data-filter-chips="">
       {filters.map((rule) => {
-        const label = columns.find((c) => c.data === rule.field)?.title ?? rule.field;
-        const summary = ruleSummary(t, rule);
+        const column = columns.find((c) => c.data === rule.field);
+        const label = column?.title ?? rule.field;
+        const summary = ruleSummary(t, rule, column);
         return (
           <span
             key={rule.id}
