@@ -405,7 +405,8 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
           body: JSON.stringify({
             content: wireContent,
             audience,
-            ...(mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
+            // FMS messaging 1.4: the column's title and the row's name, so the mention says where it was written.
+            ...(mentionedUserIds.length > 0 ? { mentionedUserIds, columnTitle: columnTitle || null, rowLabel: rowLabel || null } : {}),
           }),
         },
       );
