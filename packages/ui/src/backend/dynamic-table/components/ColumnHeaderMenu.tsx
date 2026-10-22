@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { ArrowUpAZ, ArrowDownZA, ArrowUp01, ArrowDown10, ArrowUpNarrowWide, ArrowDownWideNarrow, ArrowUpDown, Filter, SlidersHorizontal, Pin, PinOff, EyeOff, ArrowLeftToLine, ArrowRightToLine } from 'lucide-react';
 import { useT } from '@open-mercato/shared/lib/i18n/context';
@@ -78,21 +78,19 @@ const ColumnHeaderMenu: React.FC<ColumnHeaderMenuProps> = ({
     };
   }, [onClose]);
 
-  // Position below anchor, clamped to viewport
+  // Position below anchor, clamped to viewport. Measured once drawn and before the browser paints: clamped in render,
+  // the ref was still null on the first render and a last column's menu opened past the window's edge (G18).
+  const [left, setLeft] = useState(anchorRect.left);
+  useLayoutEffect(() => {
+    const width = menuRef.current?.getBoundingClientRect().width ?? 0;
+    setLeft(Math.max(8, Math.min(anchorRect.left, window.innerWidth - width - 8)));
+  }, [anchorRect.left]);
   const style: React.CSSProperties = {
     position: 'fixed',
     top: anchorRect.bottom + 4,
-    left: anchorRect.left,
+    left,
     zIndex: 9999,
   };
-
-  // Clamp to right edge
-  if (menuRef.current) {
-    const menuRect = menuRef.current.getBoundingClientRect();
-    if (style.left as number + menuRect.width > window.innerWidth - 8) {
-      style.left = window.innerWidth - menuRect.width - 8;
-    }
-  }
 
   const labels = getSortDirectionLabels(column.type);
   // Match the icon to the column type so the menu reads at a glance

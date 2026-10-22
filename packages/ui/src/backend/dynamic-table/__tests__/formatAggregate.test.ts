@@ -1,3 +1,5 @@
+import * as React from 'react'
+import { render } from '@testing-library/react'
 import { formatAggregate, coerceAggregateValue, AGGREGATE_EMPTY_PLACEHOLDER } from '../utils/formatAggregate'
 import type { ColumnDef } from '../types/index'
 
@@ -95,5 +97,39 @@ describe('coerceAggregateValue', () => {
   it('handles bigint and Date', () => {
     expect(coerceAggregateValue(BigInt(42))).toBe(42)
     expect(coerceAggregateValue(new Date(1600))).toBe(1600)
+  })
+})
+
+describe('formatAggregate — totals read like their column (FMS D12)', () => {
+  // A column names how its numbers read (FMS Sprzedaż / Koszty: Polish, grouped "1 000,00"); the totals under it
+  // followed the app's language instead, so the English UI read "4,300.00" under cells of "1 000,00".
+  const pl: ColumnDef['numericFormat'] = { locale: 'pl-PL', useGrouping: 'always' as never, minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  const asCell = (n: number) => new Intl.NumberFormat('pl-PL', { useGrouping: 'always' as never, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+
+  it("a total takes its column's locale and grouping, whatever the app's language", () => {
+    expect(formatAggregate(4300, col({ numericFormat: pl }), 'en')).toBe(asCell(4300))
+  })
+
+  it("each line of a per-currency total does too", () => {
+    const { container } = render(
+      formatAggregate(null, col({ numericFormat: pl }), 'en', 'sum', [
+        { key: 'PLN', value: '4300.0000' },
+        { key: 'EUR', value: 1000 },
+      ]) as React.ReactElement,
+    )
+    const values = Array.from(container.querySelectorAll('.hot-aggregate-breakdown-value')).map((e) => e.textContent)
+    expect(values).toEqual([asCell(4300), asCell(1000)])
+  })
+
+  it('a count stays a whole number', () => {
+    expect(formatAggregate(1234, col({ numericFormat: pl }), 'en', 'count')).toBe(new Intl.NumberFormat('pl-PL', { useGrouping: 'always' as never, maximumFractionDigits: 0 }).format(1234))
+  })
+
+  it('a column that names only its minimum decimals is summed with them', () => {
+    expect(formatAggregate(1.5, col({ numericFormat: { locale: 'en-US', minimumFractionDigits: 4 } }), 'pl-PL')).toBe('1.5000')
+  })
+
+  it('a column that names no format keeps the app locale', () => {
+    expect(formatAggregate(4300, col(), 'en-US')).toBe('4,300.00')
   })
 })

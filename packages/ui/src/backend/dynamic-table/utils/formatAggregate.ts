@@ -43,13 +43,24 @@ function fractionDigitsFor(fn: AggregationFn): { min: number; max: number } {
   return { min: 2, max: 2 };
 }
 
-/** The bare number, with no dimension label. Shared by both paths. */
-function formatAggregateNumber(num: number, locale: string | undefined, fn: AggregationFn): string {
+/**
+ * The bare number, with no dimension label. Shared by both paths.
+ *
+ * A total reads like the cells above it: when the column names its number format (`numericFormat`, as the numeric
+ * cell renderer reads it), its locale, grouping and decimals are used — under cells of "1 000,00" the English UI
+ * printed "4,300.00" (FMS D12). Only those: the unit (style, currency) stays the dimension label's, and a count stays
+ * whole.
+ */
+function formatAggregateNumber(num: number, locale: string | undefined, fn: AggregationFn, column?: ColumnDef): string {
   const digits = fractionDigitsFor(fn);
-  return new Intl.NumberFormat(locale || 'pl-PL', {
-    minimumFractionDigits: digits.min,
-    maximumFractionDigits: digits.max,
-  }).format(num);
+  const fmt = column?.numericFormat;
+  const whole = fn === 'count' || fn === 'countDistinct';
+  const min = whole ? 0 : fmt?.minimumFractionDigits ?? digits.min;
+  // A column may name only its minimum (4 decimals for a unit price): the maximum never falls below it.
+  const max = whole ? 0 : Math.max(min, fmt?.maximumFractionDigits ?? digits.max);
+  const options: Intl.NumberFormatOptions = { minimumFractionDigits: min, maximumFractionDigits: max };
+  if (fmt?.useGrouping !== undefined) options.useGrouping = fmt.useGrouping;
+  return new Intl.NumberFormat(fmt?.locale || fmt?.culture || locale || 'pl-PL', options).format(num);
 }
 
 /**
@@ -76,7 +87,7 @@ export function formatAggregateBreakdown(
       return {
         key: entry.key,
         label: entry.key || AGGREGATE_UNLABELLED_DIMENSION,
-        text: num === null ? AGGREGATE_EMPTY_PLACEHOLDER : formatAggregateNumber(num, locale, fn),
+        text: num === null ? AGGREGATE_EMPTY_PLACEHOLDER : formatAggregateNumber(num, locale, fn, column),
         magnitude: num === null ? -Infinity : Math.abs(num),
       };
     })
@@ -141,5 +152,5 @@ export function formatAggregate(
     if (!Number.isNaN(d.getTime())) return d.toLocaleDateString(locale || 'pl-PL');
   }
 
-  return formatAggregateNumber(num, locale, fn);
+  return formatAggregateNumber(num, locale, fn, column);
 }

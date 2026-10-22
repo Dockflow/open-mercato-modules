@@ -1,15 +1,10 @@
 /**
- * @mention user lookup — ledger 8.7.
+ * @mention user lookup — FMS messaging 1.4 (carried from FMS's 0.14.21 patch into 0.14.22).
  *
- * Typing "Daria" for the listed user "Daria Nowak" returned "No users found".
- * The cause was not the popup at all: `/api/auth/users?search=` matches
- * search_tokens (encrypted email), organization names and role names — never
- * the user's own display name. `?name=` is the parameter that does. Verified
- * against the live API before changing anything: `search=Daria` → 0 items,
- * `name=Daria` → Daria Nowak.
- *
- * The route lives in `@open-mercato/core` and is read-only here, and the two
- * params are ANDed when both are sent, so the popup has to pick one.
+ * The popup used to read `/api/auth/users`, which needs `auth.users.list` (admins only): every other commenter got a
+ * 403 that sent them to the login page. It now reads `/api/annotations/users` — the people any commenter may
+ * mention — with `search=` matching name or e-mail, diacritics ignored, on the server. One request per query, and a
+ * refusal leaves the list empty instead of redirecting.
  */
 import * as React from 'react'
 import { act, render, screen, waitFor } from '@testing-library/react'
@@ -28,21 +23,13 @@ const USERS = [
   { id: 'u3', name: 'Karol Wiśniewski', email: 'seed-rep-3@offdock.test' },
 ]
 
-function ok(items: typeof USERS) {
-  return { ok: true, json: async () => ({ items }) }
-}
+const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l').replace(/Ł/g, 'L').toLowerCase()
 
-/** Stands in for the upstream route: `name=` ILIKEs, `search=` never matches a name. */
-function serveLikeTheRealRoute(url: string) {
-  const q = new URL(url, 'http://localhost').searchParams
-  const name = q.get('name')
-  if (name) {
-    // Case-insensitive but NOT diacritic-insensitive — Postgres ILIKE.
-    const needle = name.toLowerCase()
-    return ok(USERS.filter((u) => u.name.toLowerCase().includes(needle)))
-  }
-  if (q.get('search')) return ok([])
-  return ok(USERS)
+/** Stands in for the route: `search=` matches name or e-mail, diacritics ignored. */
+function serveLikeTheRoute(url: string) {
+  const search = new URL(url, 'http://localhost').searchParams.get('search')
+  const items = search ? USERS.filter((u) => fold(u.name).includes(fold(search)) || fold(u.email).includes(fold(search))) : USERS
+  return { ok: true, json: async () => ({ items }) }
 }
 
 function renderPopup(query: string) {
@@ -59,11 +46,11 @@ function renderPopup(query: string) {
   )
 }
 
-describe('MentionPopup — searching by a human name (8.7)', () => {
+describe('MentionPopup — the people a commenter may mention', () => {
   beforeEach(() => {
     jest.useFakeTimers()
     apiFetch.mockReset()
-    apiFetch.mockImplementation((url: string) => Promise.resolve(serveLikeTheRealRoute(url)))
+    apiFetch.mockImplementation((url: string) => Promise.resolve(serveLikeTheRoute(url)))
   })
   afterEach(() => {
     jest.runOnlyPendingTimers()
@@ -83,44 +70,39 @@ describe('MentionPopup — searching by a human name (8.7)', () => {
     expect(apiFetch).toHaveBeenCalled()
   }
 
-  it('queries `name=`, not `search=` — the param that matches a display name', async () => {
+  it('asks the annotations users route with `search=`, and a refusal does not redirect to the login page', async () => {
     renderPopup('Daria')
     await flush()
-    const url = apiFetch.mock.calls[0][0] as string
-    expect(url).toContain('name=Daria')
-    expect(url).not.toContain('search=')
+    const [url, init] = apiFetch.mock.calls[0] as [string, { headers?: Record<string, string> }]
+    expect(url).toMatch(/^\/api\/annotations\/users\?/)
+    expect(url).toContain('search=Daria')
+    expect(url).toContain('limit=10')
+    expect(init?.headers?.['x-om-forbidden-redirect']).toBe('0')
     await waitFor(() => expect(screen.getByText('Daria Nowak')).toBeTruthy())
   })
 
-  it('matches a surname, not only the first name', async () => {
-    renderPopup('Kowal')
-    await flush()
-    await waitFor(() => expect(screen.getByText('Łukasz Kowalski')).toBeTruthy())
-  })
-
-  it('falls back to a diacritic-folded local match: "Lukasz" finds "Łukasz"', async () => {
+  it('shows whom the server matched — "Lukasz" finds "Łukasz", an e-mail finds its user — in ONE request', async () => {
     renderPopup('Lukasz')
     await flush()
-    // Server ILIKE misses it, so the popup pulls one page and folds locally.
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(screen.getByText('Łukasz Kowalski')).toBeTruthy())
+    expect(apiFetch).toHaveBeenCalledTimes(1)
   })
 
-  it('the fallback also matches an email, which `search=` did not', async () => {
+  it('matches an e-mail', async () => {
     renderPopup('seed-rep-3')
     await flush()
     await waitFor(() => expect(screen.getByText('Karol Wiśniewski')).toBeTruthy())
   })
 
-  it('costs ONE request when the server already found someone', async () => {
-    renderPopup('Nowak')
-    await flush()
-    await waitFor(() => expect(screen.getByText('Daria Nowak')).toBeTruthy())
-    expect(apiFetch).toHaveBeenCalledTimes(1)
-  })
-
   it('still says so when nobody matches at all', async () => {
     renderPopup('Zzzz')
+    await flush()
+    await waitFor(() => expect(screen.getByText('No users found')).toBeTruthy())
+  })
+
+  it('a refused lookup leaves the list empty', async () => {
+    apiFetch.mockImplementation(() => Promise.resolve({ ok: false, status: 403, json: async () => ({}) }))
+    renderPopup('Daria')
     await flush()
     await waitFor(() => expect(screen.getByText('No users found')).toBeTruthy())
   })

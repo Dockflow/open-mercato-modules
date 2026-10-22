@@ -38,23 +38,6 @@ const AVATAR_COLORS = [
   'var(--m3-avatar-10)',
 ];
 
-/**
- * Diacritic-folded lower-case form, for the local fallback match.
- *
- * `NFD` splits "ś" into "s" + U+0301, which the combining-mark range then
- * drops. "ł" survives that (it is a single codepoint with a stroke, not a
- * base+mark pair), so it is folded explicitly — which matters here because the
- * FMS user list is Polish.
- */
-function foldForMatch(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ł/g, 'l')
-    .replace(/Ł/g, 'L')
-    .toLowerCase();
-}
-
 function getAvatarColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -85,39 +68,16 @@ const MentionPopup = forwardRef<MentionPopupHandle, MentionPopupProps>(({ query,
           email: item.email || '',
         }));
 
-      // `name=`, NOT `search=` (ledger 8.7). Both params exist on
-      // /api/auth/users and they do completely different things:
-      //   search= → search_tokens (encrypted email), organization name, role name
-      //   name=   → ILIKE on the user's display name + its name search-tokens
-      // Typing "Daria" for the user "Daria Nowak" therefore returned "No users
-      // found" — the human's own name was the one field `search=` never looked
-      // at. Verified against the live API: search=Daria → 0, name=Daria → 1.
-      // The route is upstream (@open-mercato/core, read-only here), and the two
-      // params are ANDed when both are sent, so this is a choice, not a merge.
-      const params = new URLSearchParams({ pageSize: '10' });
-      if (query) params.set('name', query);
-      const response = await apiFetch(`/api/auth/users?${params}`);
+      // FMS messaging 1.4: the people any commenter may mention. `/api/auth/users` needs `auth.users.list` (admins
+      // only) and its 403 sent everyone else to the login page. Matches name or e-mail, diacritics ignored.
+      const params = new URLSearchParams({ limit: '10' });
+      if (query) params.set('search', query);
+      const response = await apiFetch(`/api/annotations/users?${params}`, { headers: { 'x-om-forbidden-redirect': '0' } });
       if (!response.ok) {
         setUsers([]);
         return;
       }
-      let results = toUsers(await response.json());
-
-      // FALLBACK — one extra request, only when the server found nothing.
-      // `ILIKE` is case-insensitive but NOT diacritic-insensitive, so "Lukasz"
-      // misses "Łukasz" and "wisniewski" misses "Wiśniewski"; the same query
-      // also cannot match an email. Rather than leave a dead end, pull one page
-      // of users and match locally on a diacritic-folded name OR email. Bounded
-      // (≤50 rows, and only on a miss), so the common path is still one query.
-      if (query && results.length === 0) {
-        const all = await apiFetch('/api/auth/users?pageSize=50');
-        if (all.ok) {
-          const needle = foldForMatch(query);
-          results = toUsers(await all.json()).filter(
-            (u) => foldForMatch(u.name).includes(needle) || foldForMatch(u.email).includes(needle),
-          ).slice(0, 10);
-        }
-      }
+      const results = toUsers(await response.json());
 
       setUsers(results);
       setHighlightedIndex(0);
