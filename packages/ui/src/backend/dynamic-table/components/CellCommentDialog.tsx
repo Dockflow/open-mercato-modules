@@ -3,6 +3,7 @@ import { Lock, Truck } from 'lucide-react';
 import ReactDOM from 'react-dom';
 import { useT } from '@open-mercato/shared/lib/i18n/context';
 import { apiCall } from '../../utils/apiCall';
+import { annotationIdBatches } from '../hooks/useAnnotations';
 import MentionPopup from './MentionPopup';
 import type { MentionPopupHandle } from './MentionPopup';
 
@@ -247,13 +248,16 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
       }
       const cellKeySet = new Set(bulkCells.map((c) => `${c.entityType}:${c.rowId}:${c.columnKey}`));
       const responses = await Promise.all(
-        Array.from(groups.entries()).map(async ([type, rowIds]) => {
-          const params = new URLSearchParams({ entityType: type, rowIds: Array.from(rowIds).join(',') });
-          const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`);
-          if (!ok || !result) return [] as any[];
-          const items: any[] = result.items || result.data || result || [];
-          return items.map((item) => ({ ...item, entityType: item.entityType ?? type }));
-        }),
+        Array.from(groups.entries()).flatMap(([type, rowIds]) =>
+          // A range over many rows: its ids in parts, as useAnnotations reads them (CR13).
+          annotationIdBatches(rowIds).map(async (part) => {
+            const params = new URLSearchParams({ entityType: type, rowIds: part.join(',') });
+            const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`);
+            if (!ok || !result) return [] as any[];
+            const items: any[] = result.items || result.data || result || [];
+            return items.map((item) => ({ ...item, entityType: item.entityType ?? type }));
+          }),
+        ),
       );
       {
         const items = responses.flat();

@@ -26,6 +26,21 @@ export interface CellAnnotationInfo {
 export type AnnotationMap = Map<string, CellAnnotationInfo>;
 
 /**
+ * The most row ids one annotations GET carries (FMS CR13). All of a table's ids in one query string ran past Node's
+ * 16 KiB request-header limit on a large desk (a UUID and its comma are 37 bytes); in parts of 300 (about 11 KB) a
+ * server's default limit holds.
+ */
+export const ANNOTATION_IDS_PER_REQUEST = 300;
+
+/** `ids` in parts of at most `size`, in order. */
+export function annotationIdBatches(ids: Iterable<string>, size: number = ANNOTATION_IDS_PER_REQUEST): string[][] {
+  const all = Array.from(ids);
+  const parts: string[][] = [];
+  for (let i = 0; i < all.length; i += size) parts.push(all.slice(i, i + size));
+  return parts;
+}
+
+/**
  * One cell's annotation target (workshop B8a).
  *
  * A grid row is not always one record. On the transport list a row is a
@@ -146,18 +161,20 @@ export function useAnnotations({
         return;
       }
 
-      const fetches = Array.from(groups.entries()).map(async ([entityType, rowIds]) => {
-        const params = new URLSearchParams({
-          entityType,
-          rowIds: Array.from(rowIds).join(','),
-        });
-        const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`, { signal });
-        if (!ok || !result) return [] as any[];
-        const items: any[] = result.items || result.data || result || [];
-        // The endpoint echoes `entityType`, but fall back to the group's key so
-        // an older response shape still lands in the right bucket.
-        return items.map((item) => ({ ...item, entityType: item.entityType ?? entityType }));
-      });
+      const fetches = Array.from(groups.entries()).flatMap(([entityType, rowIds]) =>
+        annotationIdBatches(rowIds).map(async (part) => {
+          const params = new URLSearchParams({
+            entityType,
+            rowIds: part.join(','),
+          });
+          const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`, { signal });
+          if (!ok || !result) return [] as any[];
+          const items: any[] = result.items || result.data || result || [];
+          // The endpoint echoes `entityType`, but fall back to the group's key so
+          // an older response shape still lands in the right bucket.
+          return items.map((item) => ({ ...item, entityType: item.entityType ?? entityType }));
+        }),
+      );
 
       const results = await Promise.all(fetches);
       const allItems = results.flat();
