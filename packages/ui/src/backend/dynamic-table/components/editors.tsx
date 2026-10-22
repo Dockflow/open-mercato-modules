@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { Check } from 'lucide-react';
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context';
 import { Calendar } from '../../../primitives/calendar';
-import { dateFnsLocaleFor, formatTypedDate, isoDatePlaceholderFor, parseTypedDate, toIsoDay, typedDatePlaceholderFor } from '../../inputs/dateLocale';
+import { dateFnsLocaleFor, formatTypedDate, isoDatePlaceholderFor, parseTypedDate, parseTypedDateTime, toIsoDay, typedDatePlaceholderFor } from '../../inputs/dateLocale';
 import { apiCall } from '../../utils/apiCall';
 import { markDateTimeEditor, parseLocaleNumber } from '../utils/dateTimeColumn';
 import { markPickerEditor } from '../utils/pickerColumn';
@@ -399,22 +399,9 @@ export const DateTimeEditor: React.FC<BaseEditorProps> = ({
     const textValueRef = useRef(String(value ?? ''));
 
     const parseDateTime = (val: any): { date: Date | null; hours: number; minutes: number } => {
-        if (!val) return { date: null, hours: 0, minutes: 0 };
-        const str = String(val);
-        // Try ISO or common formats
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) {
-            return { date: d, hours: d.getHours(), minutes: d.getMinutes() };
-        }
-        // Try "YYYY-MM-DD HH:mm" format
-        const match = str.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})$/);
-        if (match) {
-            const dateOnly = new Date(match[1] + 'T00:00:00');
-            if (!isNaN(dateOnly.getTime())) {
-                return { date: dateOnly, hours: parseInt(match[2], 10), minutes: parseInt(match[3], 10) };
-            }
-        }
-        return { date: null, hours: 0, minutes: 0 };
+        // '05.10.2026 14:30' is the 5th of October (new Date read it as the 10th of May), as the save reads it.
+        const d = parseTypedDateTime(val);
+        return d ? { date: d, hours: d.getHours(), minutes: d.getMinutes() } : { date: null, hours: 0, minutes: 0 };
     };
 
     const initial = parseDateTime(value);

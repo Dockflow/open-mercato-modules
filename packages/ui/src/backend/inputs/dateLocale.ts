@@ -59,24 +59,5 @@ export function formatTypedDate(date: Date, appLocale: string | null | undefined
   return DAY_FIRST_PLACEHOLDERS[code] ? `${dd}.${mm}.${date.getFullYear()}` : `${date.getFullYear()}-${mm}-${dd}`
 }
 
-/** A typed date read as that local day: 'DD.MM.RRRR' (or 'D.M.RRRR'), 'YYYY-MM-DD' or an ISO timestamp; null otherwise. */
-export function parseTypedDate(value: unknown): Date | null {
-  const text = String(value ?? '').trim()
-  if (!text) return null
-  const dayFirst = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(text)
-  const isoDay = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
-  const [y, m, d] = dayFirst ? [Number(dayFirst[3]), Number(dayFirst[2]), Number(dayFirst[1])] : isoDay ? [Number(isoDay[1]), Number(isoDay[2]), Number(isoDay[3])] : [NaN, NaN, NaN]
-  if (dayFirst || isoDay) {
-    const date = new Date(y, m - 1, d)
-    // 31.02.2026 is no day: the Date rolls over, so the parts no longer match.
-    return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d ? date : null
-  }
-  const date = new Date(text)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
-/** A day as the cell's value — 'YYYY-MM-DD', local — whatever form it was typed in. */
-export function toIsoDay(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
+export { parseTypedDate, parseTypedDateTime, toIsoDay } from './typedDate'
 
