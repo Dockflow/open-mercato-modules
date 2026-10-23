@@ -257,3 +257,35 @@ describe('conditionalFormat — columns that point into a nested row object', ()
     ).toBe('cell-red')
   })
 })
+
+/**
+ * G23.08 (owner, GT 23.10 [00:15:36]: "Chciałbym, żeby można było kolorować nie tylko pojedyncze cerki, ale całe
+ * rzędy"): a highlighting rule may paint the whole row. Every cell of a matching row takes its colour; a rule on the
+ * cell's own column still wins there. The flag survives saving the view.
+ */
+describe('whole-row highlighting (G23.08)', () => {
+  const overdue = { id: 'cf-row', field: 'daysOverdue', operator: 'gt' as const, value: 30, style: 'red-subtle' as const, wholeRow: true }
+  const paidCell = { id: 'cf-cell', field: 'status', operator: 'eq' as const, value: 'Opłacona', style: 'green' as const }
+  const compiled = compileConditionalFormats([paidCell, overdue])
+  const late = { invoiceNumber: 'FV/1', status: 'Nieopłacona', daysOverdue: 45 }
+  const onTime = { invoiceNumber: 'FV/2', status: 'Nieopłacona', daysOverdue: 3 }
+
+  it('paints every cell of a matching row, and none of a row that does not match', () => {
+    for (const field of ['invoiceNumber', 'status', 'daysOverdue']) {
+      expect(conditionalFormatClassName(compiled, field, (late as Record<string, unknown>)[field], late)).toBe(conditionalFormatClassName(compileConditionalFormats([{ ...overdue, wholeRow: undefined }]), 'daysOverdue', 45, late))
+      expect(conditionalFormatClassName(compiled, field, (onTime as Record<string, unknown>)[field], onTime)).toBeUndefined()
+    }
+  })
+
+  it("a rule on the cell's own column wins over the row's colour", () => {
+    const paidLate = { invoiceNumber: 'FV/3', status: 'Opłacona', daysOverdue: 45 }
+    const cellClass = conditionalFormatClassName(compileConditionalFormats([paidCell]), 'status', 'Opłacona', paidLate)
+    expect(conditionalFormatClassName(compiled, 'status', 'Opłacona', paidLate)).toBe(cellClass)
+    expect(conditionalFormatClassName(compiled, 'invoiceNumber', 'FV/3', paidLate)).not.toBe(cellClass)
+  })
+
+  it('keeps the whole-row flag through the saved view, and only a true one', () => {
+    expect(parseConditionalFormats([overdue])[0].wholeRow).toBe(true)
+    expect(parseConditionalFormats([{ ...overdue, wholeRow: 'yes' }])[0]).not.toHaveProperty('wholeRow')
+  })
+})

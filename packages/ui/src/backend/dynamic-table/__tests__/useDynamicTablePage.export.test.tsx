@@ -107,6 +107,22 @@ describe('useDynamicTablePage — onExportAll (whole-table export)', () => {
     }
   })
 
+  // G23.38 (GT 23.10 [01:27:03]): the toolbar's "Eksportuj" writes the VIEW — its fetch keeps the filters and sort.
+  it('onExportView walks every page of the view: its filters and sort go along', async () => {
+    const filter = { id: 'f1', field: 'role', operator: 'is_any_of', values: ['Role 1'] }
+    const { result } = renderTablePage({ initialFilters: [filter] })
+    await waitFor(() => expect(result.current.props.onExportView).toBeDefined())
+
+    const outcome = (await result.current.props.onExportView!()) as ExportAllResult
+    expect(outcome.complete).toBe(true)
+    const urls = exportCallUrls()
+    expect(urls.length).toBe(3)
+    for (const u of urls) {
+      expect(JSON.parse(u.searchParams.get('filters') ?? '[]')).toEqual([filter])
+      expect(u.searchParams.has('sortField')).toBe(true)
+    }
+  })
+
   it('keeps extraParams (tab/category scope) on every export fetch', async () => {
     const { result } = renderTablePage({ extraParams: { tab: 'customer' } })
     await waitFor(() => expect(result.current.props.onExportAll).toBeDefined())

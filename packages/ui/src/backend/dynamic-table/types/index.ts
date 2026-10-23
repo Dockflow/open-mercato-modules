@@ -1031,7 +1031,7 @@ export interface DynamicTableProps {
    * Defaults to `{ entityType: commentsEntityType, rowId: row[idColumnName] }`.
    * See the same prop on `DynamicTable` for the full rationale.
    */
-  commentsCellTarget?: (row: Record<string, any>, col: ColumnDef) => { entityType: string; rowId: string };
+  commentsCellTarget?: (row: Record<string, any>, col: ColumnDef) => { entityType: string; rowId: string; columnKey?: string };
   /** Optional view context label stored as metadata (e.g., "project_sea_containers"). */
   commentsViewContext?: string;
   /** Called after any annotation or comment change (create, update, delete). */
@@ -1082,6 +1082,12 @@ export interface DynamicTableProps {
    * "complete", so existing implementations are unaffected.
    */
   onExportAll?: () => Promise<any[] | ExportAllResult>;
+  /**
+   * G23.38 — every row of THE VIEW (its filters, search and sort, all pages), for the toolbar's "Eksportuj", which
+   * writes the view's columns in its order (or only the ticked rows when some are ticked). Preferred over
+   * `onExportAll` when both are given; `useDynamicTablePage` supplies it. Keep in step with `DynamicTable.tsx`.
+   */
+  onExportView?: () => Promise<any[] | ExportAllResult>;
   /**
    * Server-computed aggregate over the whole filtered dataset, from
    * `useDynamicTablePage`. Absent/null → the pinned totals row folds the loaded

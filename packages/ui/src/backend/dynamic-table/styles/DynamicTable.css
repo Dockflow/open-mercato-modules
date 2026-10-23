@@ -2265,6 +2265,16 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
     flex-shrink: 0;
 }
 
+/* G23.08 — "Whole row": paint the matching row across, not only the rule's cell. */
+.hot-config-cf-whole-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .hot-config-filter-remove {
     width: 24px;
     height: 24px;
