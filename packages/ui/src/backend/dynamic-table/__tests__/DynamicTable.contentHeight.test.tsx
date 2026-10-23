@@ -80,7 +80,7 @@ describe('DynamicTable height="content"', () => {
     expect(frame.className).toContain('flex-col')
     expect(frame.dataset.paneCapped).toBe('true')
     expect(body(container).style.maxHeight).toBe('')
-    expect(body(container).style.flex).toBe('0 1 auto')
+    expect(body(container).style.flex).toBe('1 1 auto')
     expect(parseFloat(body(container).style.minHeight)).toBe(0)
   })
 
@@ -92,7 +92,7 @@ describe('DynamicTable height="content"', () => {
     expect(frame.style.height).toBe('')
     expect(frame.style.maxHeight).toBe(`${window.innerHeight}px`)
     expect(frame.className).not.toContain('flex-1')
-    expect(body(container).style.flex).toBe('0 1 auto')
+    expect(body(container).style.flex).toBe('1 1 auto')
   })
 
   it('a Sheet opened from a widget gives its tables their own height back', () => {
