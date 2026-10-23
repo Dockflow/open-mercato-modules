@@ -442,6 +442,11 @@
 .hot-appearance-v2 .hot-toolbar {
   display: flex;
   align-items: center;
+  /* A wide table's toolbar wraps when its filter chips do not fit, rather than
+     clipping them (owner 23.10, M23.15). It stays one row whenever everything
+     fits; a narrow pane keeps one row regardless (dt-grid query below). */
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: 12px;
   /* 16px horizontal, matching `.hot-virtual-container`'s own 16px margin, so
      the search pill's left edge lines up with the table's first column. It was
@@ -463,6 +468,10 @@
 .hot-appearance-v2 .hot-toolbar .hot-toolbar-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
+  min-width: 0;
   gap: 8px;
 }
 /* The toolbar's own search skin used to live here: a second, competing set of
@@ -2381,6 +2390,13 @@
     /* Keeps actions at the right edge even if the search is hidden by the
        pane's chrome toggles, when nothing else would push them over. */
     margin-left: auto;
+  }
+
+  /* One row here: the chip strip scrolls inside it (each chip still one line, M23.15). */
+  .hot-appearance-v2 .hot-toolbar .hot-filter-chips {
+    flex-wrap: nowrap;
+    max-width: 360px;
+    overflow-x: auto;
   }
 
   /* The TABS scroll; the row does not.
