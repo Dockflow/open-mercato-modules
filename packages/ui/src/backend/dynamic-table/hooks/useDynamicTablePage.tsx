@@ -721,7 +721,11 @@ export function useDynamicTablePage<TRow = any>(
   // the export failed, and no file is written), and a walk that cannot prove it
   // collected everything returns `complete: false` WITH ITS COUNTS rather than
   // a bare array.
-  const exportAllRows = useCallback(async (): Promise<ExportAllResult> => {
+  //
+  // G23.38 — `view: true` walks THE VIEW instead: the same pages with the
+  // perspective's filters and the search the list itself sends, so the toolbar's
+  // "Eksportuj" writes what the user sees (GT 23.10 [01:27:03]–[01:28:05]).
+  const walkExportPages = useCallback(async (view: boolean): Promise<ExportAllResult> => {
     const pageLimit = 100 // upstream list cap
     const collected: any[] = []
     let pageNum = 1
@@ -744,6 +748,11 @@ export function useDynamicTablePage<TRow = any>(
       params.set('pageSize', String(pageLimit))
       params.set('sortField', sortField)
       params.set('sortDir', sortDir)
+      if (view && effectiveSearch) {
+        params.set('q', effectiveSearch)
+        params.set('search', effectiveSearch)
+      }
+      if (view && effectiveFilters.length) params.set('filters', JSON.stringify(effectiveFilters))
       const extra =
         typeof config.extraParams === 'function' ? config.extraParams() : config.extraParams
       if (extra) Object.entries(extra).forEach(([key, value]) => params.set(key, value))
@@ -812,7 +821,9 @@ export function useDynamicTablePage<TRow = any>(
       complete: incomplete === null,
       ...(incomplete ? { reason: incomplete } : {}),
     }
-  }, [source, sortField, sortDir, lookupColumns, rollupColumns, config.extraParams, config.mapApiItem])
+  }, [source, sortField, sortDir, effectiveSearch, effectiveFilters, lookupColumns, rollupColumns, config.extraParams, config.mapApiItem])
+  const exportAllRows = useCallback(() => walkExportPages(false), [walkExportPages])
+  const exportViewRows = useCallback(() => walkExportPages(true), [walkExportPages])
 
   // ── Cell Edit Handler ──
 
@@ -1542,6 +1553,7 @@ export function useDynamicTablePage<TRow = any>(
       // own box otherwise (identical when no workspace is involved).
       searchQuery: effectiveSearch,
       onExportAll: exportAllRows,
+      onExportView: exportViewRows,
       aggregateResult: aggregateQuery.data ?? null,
       aggregateLoading: aggregateQuery.isFetching,
       aggregateError: aggregateQuery.isError,

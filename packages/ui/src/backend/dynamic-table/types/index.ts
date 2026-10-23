@@ -1083,6 +1083,12 @@ export interface DynamicTableProps {
    */
   onExportAll?: () => Promise<any[] | ExportAllResult>;
   /**
+   * G23.38 — every row of THE VIEW (its filters, search and sort, all pages), for the toolbar's "Eksportuj", which
+   * writes the view's columns in its order (or only the ticked rows when some are ticked). Preferred over
+   * `onExportAll` when both are given; `useDynamicTablePage` supplies it. Keep in step with `DynamicTable.tsx`.
+   */
+  onExportView?: () => Promise<any[] | ExportAllResult>;
+  /**
    * Server-computed aggregate over the whole filtered dataset, from
    * `useDynamicTablePage`. Absent/null → the pinned totals row folds the loaded
    * page instead and says so.

@@ -115,6 +115,7 @@ import ColumnHeaders from './components/ColumnHeaders';
 import BulkActionsBar from './components/BulkActionsBar';
 import ExportMenu from './components/ExportMenu';
 import {
+  extractExportRows,
   extractExportRowsFromData,
   toCsv,
   toXlsxBlob,
@@ -286,6 +287,8 @@ export interface DynamicTableProps {
    * typecheck is the gate that matters for this prop.
    */
   onExportAll?: () => Promise<any[] | ExportAllResult>;
+  /** G23.38 — every row of the view, all pages (see `types/index.ts`); the toolbar export prefers it. */
+  onExportView?: () => Promise<any[] | ExportAllResult>;
   tableRef: React.RefObject<HTMLDivElement | null>;
   /** Message to display when data is empty (e.g., "No addresses") */
   emptyMessage?: string;
@@ -555,6 +558,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   onSelectionChange,
   onBulkDelete,
   onExportAll,
+  onExportView,
   tableRef,
   emptyMessage,
   columnActions,
@@ -2600,16 +2604,29 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     }
   }, [exportFileName, displayTableName, t]);
 
-  // Toolbar export: the WHOLE table — every column (ignoring the active
-  // perspective's column visibility) and every row. When the page supplies
-  // `onExportAll`, re-fetch all pages from the server (ignoring filters);
-  // otherwise fall back to the currently-loaded rows.
+  // Toolbar export: THE VIEW (G23.38, GT 23.10 [01:27:03]–[01:28:05] "ten
+  // widok, który widzicie, to to powinno być eksport … żeby tam się dało
+  // zaznaczyć, które chcemy konkretnie"). Its columns in its order; the ticked
+  // rows when some are ticked; otherwise every row of the view — all its pages
+  // re-read with its filters, search and sort (`onExportView`), or the rows the
+  // table holds, as shown, when the page gives no fetch. It used to write every
+  // column of the whole table, filters ignored. A page with only `onExportAll`
+  // keeps that fetch (its rows), now in the view's columns.
   const [isExportingAll, setIsExportingAll] = useState(false);
   const handleExportAll = useCallback(async (format: ExportFormat) => {
     if (isExportingAll) return;
+    if (selectedRowIds.size > 0) {
+      await serializeAndDownload(extractExportRows(store, cols, selectedRowIds, selectionColumnName), format);
+      return;
+    }
+    const fetchRows = onExportView ?? onExportAll;
+    if (!fetchRows) {
+      await serializeAndDownload(extractExportRows(store, cols, new Set(), selectionColumnName), format);
+      return;
+    }
     setIsExportingAll(true);
     try {
-      const outcome = onExportAll ? await onExportAll() : data;
+      const outcome = await fetchRows();
 
       // HEDGE-123 — a file is only written for a result proven complete.
       //
@@ -2638,7 +2655,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         return;
       }
 
-      await serializeAndDownload(extractExportRowsFromData(rows ?? [], baseColumns), format);
+      await serializeAndDownload(extractExportRowsFromData(rows ?? [], cols), format);
     } catch (err) {
       // Name the failure. "Could not export" alone left a user unable to say
       // whether it was their filter, the network, or the server.
@@ -2652,7 +2669,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     } finally {
       setIsExportingAll(false);
     }
-  }, [isExportingAll, onExportAll, data, serializeAndDownload, baseColumns, t]);
+  }, [isExportingAll, selectedRowIds, store, cols, selectionColumnName, onExportView, onExportAll, serializeAndDownload, t]);
 
   const openAnnotateForSelection = useCallback(() => {
     if (!enableComments || !commentsEntityType) return;
