@@ -3975,7 +3975,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           is inert and they keep rendering flush. */}
       {/* A host that hides the tabs row still wants the card: the tabs are a
           user choice there, not a sign that this is an embedded sub-table. */}
-      <div className={!hasCard ? 'contents' : `hot-card${shouldFillHeight ? ' flex flex-col flex-1 min-h-0' : isPaneCapped ? ' flex flex-col min-h-0' : ''}`}>
+      <div className={!hasCard ? 'contents' : `hot-card${shouldFillHeight ? ' flex flex-col flex-1 min-h-0' : isPaneCapped ? ' flex flex-col min-h-0 grow' : ''}`}>
 
       {/* Toolbar hidden inside a host: the ⚙ and ⋯ float in the corner on
           hover, or hiding the toolbar would hide the way to bring it back. */}
@@ -4286,8 +4286,10 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           // The sticky totals footer covers the scroller's last ~33 px: keyboard moves and
           // scrollIntoView stop a row above it, not under it.
           ...(aggregations.length > 0 && { scrollPaddingBottom: 40 }),
-          // Capped by the pane: the rows region gives way first, so the toolbar and footer stay in view.
-          ...(isPaneCapped && !isFullscreen && { flex: '0 1 auto', minHeight: 0 }),
+          // Capped by the pane: the rows region gives way first, so the toolbar and footer stay in view. It also grows
+          // into the height the table holds while someone works in it, so a search that leaves one row does not shrink
+          // the grid inside the held frame (M23.26, owner call 23.10: 215 → 85 px on e-Kancelaria).
+          ...(isPaneCapped && !isFullscreen && { flex: '1 1 auto', minHeight: 0 }),
           overflow: 'auto',
           position: 'relative',
           outline: 'none',

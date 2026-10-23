@@ -146,6 +146,17 @@ describe('DynamicTable height="content" — no resize while someone works in it'
     expect(frame().style.minHeight).toBe('180px')
   })
 
+  it("a pane-capped table ('fill') holds its frame, and its rows region grows into it rather than shrinking inside", () => {
+    // M23.26 (owner call 23.10): on e-Kancelaria the frame held but the grid inside went 215 → 85 px on a search.
+    heights.set('frame', 300).set('rows', 215)
+    render(React.createElement(Harness, { height: 'fill' }))
+    fireEvent.pointerDown(document.body)
+    expect(frame().style.minHeight).toBe('300px')
+    expect(rowsRegion().style.flex).toBe('1 1 auto')
+    const card = frame().querySelector('.hot-card')
+    if (card) expect(card.className).toContain('grow')
+  })
+
   it('a table with a height of its own is never held', () => {
     heights.set('frame', 374).set('rows', 300)
     render(React.createElement(Harness, { height: 400 }))
