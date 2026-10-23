@@ -1031,7 +1031,7 @@ export interface DynamicTableProps {
    * Defaults to `{ entityType: commentsEntityType, rowId: row[idColumnName] }`.
    * See the same prop on `DynamicTable` for the full rationale.
    */
-  commentsCellTarget?: (row: Record<string, any>, col: ColumnDef) => { entityType: string; rowId: string };
+  commentsCellTarget?: (row: Record<string, any>, col: ColumnDef) => { entityType: string; rowId: string; columnKey?: string };
   /** Optional view context label stored as metadata (e.g., "project_sea_containers"). */
   commentsViewContext?: string;
   /** Called after any annotation or comment change (create, update, delete). */

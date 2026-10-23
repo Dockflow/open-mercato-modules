@@ -517,7 +517,7 @@ export interface DynamicTableProps {
    * MUST be a pure function of `(row, col)`; it is called once per rendered
    * cell and once per row × column when the annotation request is built.
    */
-  commentsCellTarget?: (row: Record<string, any>, col: ColumnDef) => { entityType: string; rowId: string };
+  commentsCellTarget?: (row: Record<string, any>, col: ColumnDef) => { entityType: string; rowId: string; columnKey?: string };
   /** Optional view context label stored as metadata (e.g., "project_sea_containers"). */
   commentsViewContext?: string;
   /** Called after any annotation or comment change (create, update, delete). */
@@ -1060,12 +1060,17 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
    * belongs to.
    */
   const resolveCommentTarget = useCallback(
-    (rowData: Record<string, any> | undefined, col: ColumnDef): { entityType: string; rowId: string } => {
-      if (!rowData) return { entityType: '', rowId: '' };
-      if (commentsCellTarget) return commentsCellTarget(rowData, col);
+    (rowData: Record<string, any> | undefined, col: ColumnDef): { entityType: string; rowId: string; columnKey: string } => {
+      if (!rowData) return { entityType: '', rowId: '', columnKey: col.data };
+      // G23.09 — a table may name the record AND the column its cell is about, so a mark on an invoice's amount in
+      // one table is the same mark in every table that shows that invoice's amount (whatever the column is called).
+      if (commentsCellTarget) {
+        const target = commentsCellTarget(rowData, col);
+        return { entityType: target.entityType, rowId: target.rowId, columnKey: target.columnKey || col.data };
+      }
       const entityType =
         typeof commentsEntityType === 'function' ? commentsEntityType(rowData) : commentsEntityType || '';
-      return { entityType, rowId: String(rowData[idColumnName] ?? '') };
+      return { entityType, rowId: String(rowData[idColumnName] ?? ''), columnKey: col.data };
     },
     [commentsCellTarget, commentsEntityType, idColumnName],
   );
@@ -1108,7 +1113,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     (rowData: Record<string, any>, column: ColumnDef): string | null => {
       const target = resolveCommentTarget(rowData, column);
       if (!target.entityType || !target.rowId) return null;
-      return annotationKey(target, column.data);
+      return annotationKey(target, target.columnKey);
     },
     [resolveCommentTarget],
   );
@@ -2342,10 +2347,10 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           if (!cConfig) continue;
           const target = resolveCommentTarget(rData, cConfig);
           if (!target.entityType || !target.rowId) continue;
-          const key = annotationKey(target, cConfig.data);
+          const key = annotationKey(target, target.columnKey);
           if (seen.has(key)) continue;
           seen.add(key);
-          cells.push({ entityType: target.entityType, rowId: target.rowId, columnKey: cConfig.data });
+          cells.push({ entityType: target.entityType, rowId: target.rowId, columnKey: target.columnKey });
         }
       }
       return cells;
@@ -2377,7 +2382,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       col,
       entityType: target.entityType,
       rowId: target.rowId,
-      annotation: annotations.get(annotationKey(target, col.data)),
+      columnKey: target.columnKey,
+      annotation: annotations.get(annotationKey(target, target.columnKey)),
       cell,
     };
   }, [store, cols, resolveCommentTarget, annotations]);
@@ -2440,7 +2446,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         setCommentDialog({
           entityType: info.entityType,
           rowId: info.rowId,
-          columnKey: info.col.data,
+          columnKey: info.columnKey,
           columnTitle: info.col.title || info.col.data,
           rowLabel: info.rowData.name || info.rowData.title || undefined,
           annotationId: info.annotation?.id || null,
@@ -2479,7 +2485,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         setCommentDialog({
           entityType: cellTarget.entityType,
           rowId: cellTarget.rowId,
-          columnKey: colConfig.data,
+          columnKey: cellTarget.columnKey,
           columnTitle: colConfig.title || colConfig.data,
           anchorRect: (cell as HTMLElement).getBoundingClientRect(),
           bulkCells,
@@ -2492,12 +2498,12 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     e.preventDefault();
     e.stopPropagation();
 
-    const annotation = annotations.get(annotationKey(cellTarget, colConfig.data));
+    const annotation = annotations.get(annotationKey(cellTarget, cellTarget.columnKey));
 
     setCommentDialog({
       entityType: cellTarget.entityType,
       rowId: cellTarget.rowId,
-      columnKey: colConfig.data,
+      columnKey: cellTarget.columnKey,
       columnTitle: colConfig.title || colConfig.data,
       rowLabel: rowData.name || rowData.title || undefined,
       annotationId: annotation?.id || null,
@@ -2706,7 +2712,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         setCommentDialog({
           entityType: firstTarget.entityType,
           rowId: firstTarget.rowId,
-          columnKey: firstCol.data,
+          columnKey: firstTarget.columnKey,
           columnTitle: firstCol.title || firstCol.data,
           anchorRect,
           bulkCells,
@@ -2714,11 +2720,11 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         return;
       }
     }
-    const annotation = annotations.get(annotationKey(firstTarget, firstCol.data));
+    const annotation = annotations.get(annotationKey(firstTarget, firstTarget.columnKey));
     setCommentDialog({
       entityType: firstTarget.entityType,
       rowId: firstTarget.rowId,
-      columnKey: firstCol.data,
+      columnKey: firstTarget.columnKey,
       columnTitle: firstCol.title || firstCol.data,
       rowLabel: firstRowData.name || firstRowData.title || undefined,
       annotationId: annotation?.id || null,
