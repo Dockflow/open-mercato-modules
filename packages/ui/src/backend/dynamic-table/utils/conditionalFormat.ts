@@ -84,6 +84,11 @@ export interface ConditionalFormatRule {
   /** Other column's `data` key, for `beforeField` / `afterField`. */
   compareField?: string;
   style: ConditionalFormatStyle;
+  /**
+   * G23.08 (owner, GT 23.10 [00:15:36]: "kolorować nie tylko pojedyncze cerki, ale całe rzędy") — a matching row is
+   * painted across, not only its `field` cell. A rule on the cell's own column still wins over a row rule.
+   */
+  wholeRow?: boolean;
 }
 
 /**
@@ -118,7 +123,7 @@ export function parseConditionalFormats(raw: unknown): ConditionalFormatRule[] {
   const out: ConditionalFormatRule[] = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') continue;
-    const { id, field, operator, value, compareField, style } = entry as Record<string, unknown>;
+    const { id, field, operator, value, compareField, style, wholeRow } = entry as Record<string, unknown>;
     if (typeof field !== 'string' || !field) continue;
     if (
       typeof operator !== 'string' ||
@@ -137,6 +142,7 @@ export function parseConditionalFormats(raw: unknown): ConditionalFormatRule[] {
         typeof value === 'string' || typeof value === 'number' ? value : value === null ? null : undefined,
       compareField: typeof compareField === 'string' && compareField ? compareField : undefined,
       style: style as ConditionalFormatStyle,
+      ...(wholeRow === true ? { wholeRow: true } : {}),
     });
     if (out.length >= MAX_CONDITIONAL_FORMAT_RULES) break;
   }
@@ -156,12 +162,15 @@ interface CompiledRule {
 /** Pre-compiled rule set: field -> ordered predicates. */
 export interface CompiledConditionalFormats {
   byField: Map<string, CompiledRule[]>;
+  /** G23.08 — rules that paint the whole row, in order: each reads its own field. */
+  rowRules: Array<CompiledRule & { field: string }>;
   /** `true` when there is nothing to evaluate — lets callers skip entirely. */
   isEmpty: boolean;
 }
 
 export const EMPTY_CONDITIONAL_FORMATS: CompiledConditionalFormats = {
   byField: new Map(),
+  rowRules: [],
   isEmpty: true,
 };
 
@@ -314,14 +323,19 @@ export function compileConditionalFormats(
 ): CompiledConditionalFormats {
   if (!rules || rules.length === 0) return EMPTY_CONDITIONAL_FORMATS;
   const byField = new Map<string, CompiledRule[]>();
+  const rowRules: CompiledConditionalFormats['rowRules'] = [];
   for (const rule of rules.slice(0, MAX_CONDITIONAL_FORMAT_RULES)) {
     const compiled = compileRule(rule, shownTextFor(columns?.find((c) => c.data === rule.field)));
     if (!compiled) continue;
+    if (rule.wholeRow) {
+      rowRules.push({ ...compiled, field: rule.field });
+      continue;
+    }
     const list = byField.get(rule.field);
     if (list) list.push(compiled);
     else byField.set(rule.field, [compiled]);
   }
-  return { byField, isEmpty: byField.size === 0 };
+  return { byField, rowRules, isEmpty: byField.size === 0 && rowRules.length === 0 };
 }
 
 /**
@@ -338,12 +352,17 @@ export function conditionalFormatClassName(
 ): string | undefined {
   if (compiled.isEmpty) return undefined;
   const rules = compiled.byField.get(field);
-  if (!rules) return undefined;
-  // A dotted `data` path (`status.transport`) leaves the grid's own cell value
-  // undefined — read the nested field the column actually shows.
-  const resolved = value === undefined ? readCellValue(rowData, field) : value;
-  for (const rule of rules) {
-    if (rule.test(resolved, rowData)) return rule.className;
+  if (rules) {
+    // A dotted `data` path (`status.transport`) leaves the grid's own cell value
+    // undefined — read the nested field the column actually shows.
+    const resolved = value === undefined ? readCellValue(rowData, field) : value;
+    for (const rule of rules) {
+      if (rule.test(resolved, rowData)) return rule.className;
+    }
+  }
+  // G23.08 — no rule of its own column fired: the first whole-row rule that fires for the row paints this cell too.
+  for (const rule of compiled.rowRules) {
+    if (rule.test(readCellValue(rowData, rule.field), rowData)) return rule.className;
   }
   return undefined;
 }

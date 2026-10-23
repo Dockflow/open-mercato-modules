@@ -318,6 +318,17 @@ const ConfigureViewFormatting: React.FC<ConfigureViewFormattingProps> = ({
               dataAttributes={{ 'data-cf-style': true }}
             />
 
+            {/* G23.08 — paint the whole row, not only this column's cell. */}
+            <label className="hot-config-cf-whole-row">
+              <input
+                type="checkbox"
+                checked={rule.wholeRow === true}
+                onChange={(e) => updateRule(rule.id, { wholeRow: e.target.checked || undefined })}
+                data-cf-whole-row
+              />
+              <span>{t('dynamicTable.conditionalFormat.wholeRow', 'Whole row')}</span>
+            </label>
+
             <button onClick={() => removeRule(rule.id)} className="hot-config-filter-remove">
               <X className="w-3.5 h-3.5" />
             </button>
