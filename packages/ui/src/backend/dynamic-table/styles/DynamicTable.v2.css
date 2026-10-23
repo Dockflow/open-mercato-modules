@@ -163,6 +163,37 @@
   }
 }
 
+/* Over the column headers (a grid with a header row): the bar takes no room of its own. It is a
+   zero-height anchor just above the rows region, and the bar hangs from it over the sticky header
+   row, exactly that row's height (`--hot-bulk-bar-height`, read when it opens). Ticking a row only
+   fades it in, so nothing below moves (owner, 23.10). Lined up with the rows region's own inset. */
+.hot-bulk-bar-wrap.hot-bulk-bar-over-header {
+  display: block;
+  position: relative;
+  height: 0;
+  z-index: 30;
+  transition: none;
+}
+.hot-appearance-v2.hot-container[data-has-toolbar="true"] .hot-bulk-bar-over-header {
+  margin: 0 16px;
+}
+.hot-bulk-bar-over-header .hot-bulk-bar-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--hot-bulk-bar-height, 36px);
+  background: var(--m3-surface-container-lowest);
+  pointer-events: none;
+}
+.hot-bulk-bar-over-header.is-open .hot-bulk-bar-inner {
+  pointer-events: auto;
+}
+.hot-appearance-v2.hot-container .hot-bulk-bar-over-header .hot-bulk-bar {
+  height: 100%;
+  margin: 0;
+}
+
 /* Grouped-actions (bulk) bar — shown while rows are selected on a table that
    defines a bulk action. FMS visual language (GT, 2026-10-08): a neutral
    surface like the other controls, not a primary-coloured floating pill — no

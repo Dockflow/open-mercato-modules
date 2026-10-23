@@ -12,6 +12,7 @@ import React, {
   useCallback,
   useContext,
 } from 'react';
+import { flushSync } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { CONTENT_MAX_HEIGHT, DynamicTableSizingContext, type DynamicTableHeight } from './sizing';
 
@@ -1675,6 +1676,14 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   // it answers for unmounted columns and survives a perspective reorder.
   const badgeFitRef = useRef<Map<string, number>>(new Map());
 
+  // Sync columns to store when they change (e.g., perspective reorder/hide/show).
+  // This ensures setCellValue uses the correct field mapping. Before the paint and before
+  // the fill below: the store's widths are keyed by index, so a view switch painted one
+  // frame of the new columns at the old view's widths (owner, 23.10: no width flicker).
+  useLayoutEffect(() => {
+    store.setColumns(cols);
+  }, [cols, store]);
+
   // -------------------- FILL THE CONTAINER --------------------
   // The sum of the DECLARED widths — what the fill measures against. Re-running
   // the fill when it moves is what makes a hand resize, a badge auto-fit or a
@@ -1726,7 +1735,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     if (!el || typeof ResizeObserver === 'undefined') return;
     // Re-run on container resize: a browser-window resize, the split view
     // opening, a sidebar collapsing — all of them change what "full width" is.
-    const ro = new ResizeObserver(() => applyColumnFill());
+    // Applied before the paint the resize belongs to: a state update from an observer
+    // otherwise renders a frame later, and that frame shows the columns unfilled.
+    const ro = new ResizeObserver(() => flushSync(applyColumnFill));
     ro.observe(el);
     return () => ro.disconnect();
     // `isFullscreen` re-parents the scroller, so the observer must move with it.
@@ -3488,12 +3499,6 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     store.setData(data);
   }, [data, store]);
 
-  // Sync columns to store when they change (e.g., perspective reorder/hide/show).
-  // This ensures setCellValue uses the correct field mapping.
-  useEffect(() => {
-    store.setColumns(cols);
-  }, [cols, store]);
-
   // Persist manual column-width changes per user (localStorage). Saved widths are
   // applied in a pre-paint layout effect (no layout shift on reload), and the
   // store preserves widths across setColumns() so perspective reorder/show-hide
@@ -3782,20 +3787,23 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   // The host's sizing (a board slot) wins over the table's own: a registered list page shown as a
   // widget asks for 'fill', and its slot wants 'content'.
   const sizing = useContext(DynamicTableSizingContext)
-  const heightMode = sizing?.height ?? height
+  const requestedHeight = sizing?.height ?? height
+  // 'fill' is as tall as the rows, capped at the scroll pane's bottom: a list page with three rows ends
+  // after them instead of standing a screen of empty grid tall (owner, 23.10: every table sized to its
+  // content where it can be). Past the pane the rows scroll inside it, as they did.
+  const heightMode = requestedHeight === 'fill' ? 'content' : requestedHeight
   const isContentHeight = heightMode === 'content'
-  const contentMaxHeight = sizing?.maxHeight ?? maxHeight ?? CONTENT_MAX_HEIGHT
+  const contentMaxHeight = requestedHeight === 'fill' ? 'fill' : (sizing?.maxHeight ?? maxHeight ?? CONTENT_MAX_HEIGHT)
   // A `'fill'` cap stops the whole table at its scroll pane's bottom (a split-view pane), measured like `'fill'`.
   const isPaneCapped = isContentHeight && contentMaxHeight === 'fill'
   // Determine if we should fill available height
-  const shouldFillHeight = heightMode === '100%' || heightMode === 'fill'
-  const isViewportFill = heightMode === 'fill'
-  const measuresPane = isViewportFill || isPaneCapped
+  const shouldFillHeight = heightMode === '100%'
+  const measuresPane = isPaneCapped
   const outerContainerRef = useRef<HTMLDivElement>(null)
   const [fillHeight, setFillHeight] = useState<number | null>(null)
 
-  // When height='fill', measure available viewport space and set explicit height.
-  // This avoids relying on CSS flex chain from parent containers.
+  // A table capped at its scroll pane ('fill', or 'content' up to 'fill') measures the space down to the
+  // pane's visible bottom. This avoids relying on CSS flex chain from parent containers.
   useLayoutEffect(() => {
     if (!measuresPane || isFullscreen) return
     const el = outerContainerRef.current
@@ -3834,6 +3842,88 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     }
   }, [measuresPane, isFullscreen])
 
+  // 'content' follows its rows until the person starts working in the page. From their first click
+  // or key on, the table never gets shorter while mounted: a search, a filter, an emptied result or a
+  // sort must not move the page under the pointer (owner, 23.10). It still grows when its rows need
+  // the room, up to the cap. A new window width lets go and holds the height the new layout gives.
+  useLayoutEffect(() => {
+    if (!isContentHeight || isFullscreen || typeof ResizeObserver === 'undefined') return
+    const frame = outerContainerRef.current
+    const rowsRegion = tableRef.current
+    if (!frame) return
+    // The rows region holds too, so its well (the grid's own background) keeps its size; a pane-capped
+    // table's rows region gives way to the pane instead.
+    const held = [frame, ...(rowsRegion && !isPaneCapped ? [rowsRegion] : [])]
+    const floors = new Map<HTMLElement, number>()
+    let width = frame.clientWidth
+    const hold = (el: HTMLElement) => {
+      const height = el.offsetHeight
+      if (height <= (floors.get(el) ?? 0)) return
+      floors.set(el, height)
+      el.style.minHeight = `${height}px`
+    }
+    const letGo = () => {
+      for (const el of held) el.style.minHeight = ''
+      floors.clear()
+    }
+    const arm = () => {
+      if (floors.size === 0) held.forEach(hold)
+    }
+    const ro = new ResizeObserver(() => {
+      if (floors.size === 0) return
+      if (frame.clientWidth !== width) {
+        width = frame.clientWidth
+        letGo()
+        held.forEach(hold)
+        return
+      }
+      held.forEach(hold)
+    })
+    held.forEach((el) => ro.observe(el))
+    document.addEventListener('pointerdown', arm, true)
+    document.addEventListener('keydown', arm, true)
+    window.addEventListener('resize', letGo)
+    return () => {
+      ro.disconnect()
+      document.removeEventListener('pointerdown', arm, true)
+      document.removeEventListener('keydown', arm, true)
+      window.removeEventListener('resize', letGo)
+      letGo()
+    }
+  }, [isContentHeight, isPaneCapped, isFullscreen, tableRef])
+
+  const hasBulkBar = selectable && (!!onBulkDelete || (bulkActions?.length ?? 0) > 0)
+  const bulkBarOverHeader = !usingCustomBody && colHeaders
+  const bulkBarOpen = selectedRowIds.size >= 1
+  if (bulkBarOpen) bulkBarCountRef.current = selectedRowIds.size
+  // Over the header row the bar is exactly as tall as that row, read before the paint that shows it.
+  useLayoutEffect(() => {
+    if (!bulkBarOpen || !bulkBarOverHeader) return
+    const header = tableRef.current?.querySelector<HTMLElement>('.hot-headers-sticky')
+    if (header && header.offsetHeight > 0) {
+      outerContainerRef.current?.style.setProperty('--hot-bulk-bar-height', `${header.offsetHeight}px`)
+    }
+  }, [bulkBarOpen, bulkBarOverHeader, tableRef])
+  const renderBulkBar = (overHeader: boolean) => (
+    <div
+      // Only the band takes room; it is what the rows region's cap gives way to.
+      ref={overHeader ? undefined : bulkBarRef}
+      className={`hot-bulk-bar-wrap${overHeader ? ' hot-bulk-bar-over-header' : ''}${bulkBarOpen ? ' is-open' : ''}`}
+      aria-hidden={!bulkBarOpen}
+    >
+      <div className="hot-bulk-bar-inner">
+        <BulkActionsBar
+          count={bulkBarOpen ? selectedRowIds.size : bulkBarCountRef.current}
+          busy={isBulkDeleting}
+          onDelete={onBulkDelete ? handleBulkDelete : undefined}
+          onClear={clearSelection}
+          actions={bulkActions}
+          selectedIds={Array.from(selectedRowIds)}
+        />
+      </div>
+    </div>
+  )
+
   // Table content shared between normal and fullscreen modes
   const tableContent = (
     <div
@@ -3859,7 +3949,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       data-clickable-rows={onRowClick ? 'true' : undefined}
       data-row-hover-style={onRowClick ? rowHoverStyle : undefined}
       style={{
-        height: isFullscreen ? '100%' : (isViewportFill && fillHeight ? fillHeight : (shouldFillHeight ? '100%' : isContentHeight ? undefined : heightMode)),
+        height: isFullscreen ? '100%' : (shouldFillHeight ? '100%' : isContentHeight ? undefined : heightMode),
         width: isFullscreen ? '100%' : width,
         position: 'relative',
         ...(shouldFillHeight && { minHeight: 0 }),
@@ -4084,33 +4174,12 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           table that defines something to do with the selection (`onBulkDelete`
           or `uiConfig.bulkActions`). A bar that can only count and deselect is
           noise (GT, 2026-10-08), so there are no built-in Copy / Export buttons:
-          Ctrl/Cmd+C still copies the selected rows. Sits between the perspective
-          tabs and the column headers. Kept mounted (not conditionally rendered)
-          so it can animate open/closed via the grid-rows collapse on the
-          wrapper — avoids the hard layout shift. `bulkBarCountRef` freezes the
-          last visible count so the text doesn't flash "0 selected" mid-collapse. */}
-      {selectable && (!!onBulkDelete || (bulkActions?.length ?? 0) > 0) && (() => {
-        const bulkBarOpen = selectedRowIds.size >= 1;
-        if (bulkBarOpen) bulkBarCountRef.current = selectedRowIds.size;
-        return (
-          <div
-            ref={bulkBarRef}
-            className={`hot-bulk-bar-wrap${bulkBarOpen ? ' is-open' : ''}`}
-            aria-hidden={!bulkBarOpen}
-          >
-            <div className="hot-bulk-bar-inner">
-              <BulkActionsBar
-                count={bulkBarOpen ? selectedRowIds.size : bulkBarCountRef.current}
-                busy={isBulkDeleting}
-                onDelete={onBulkDelete ? handleBulkDelete : undefined}
-                onClear={clearSelection}
-                actions={bulkActions}
-                selectedIds={Array.from(selectedRowIds)}
-              />
-            </div>
-          </div>
-        );
-      })()}
+          Ctrl/Cmd+C still copies the selected rows. A grid with column headers
+          gets it OVER the header row (below, just above the rows region); a
+          custom body has no header row, so there it is a band between the
+          perspective tabs and the body. `bulkBarCountRef` freezes the last
+          visible count so the text doesn't flash "0 selected" mid-collapse. */}
+      {hasBulkBar && !bulkBarOverHeader && renderBulkBar(false)}
 
       {/* A full-width band between the toolbar and the body — the folder row
           in the documents module. Rendered for BOTH view modes. */}
@@ -4121,6 +4190,11 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
             : beforeBody}
         </div>
       ) : null}
+
+      {/* The selection bar over the column headers: it takes the header row's place instead of
+          pushing the rows down, so ticking a row moves nothing (owner, 23.10: a table must not
+          resize while someone works in it). */}
+      {hasBulkBar && bulkBarOverHeader && renderBulkBar(true)}
 
       {/* Table Container */}
       <div

@@ -4,7 +4,8 @@ import { createContext } from 'react'
  * How a DynamicTable sizes its scroll body.
  *
  * - `'auto'` (default) — a fixed 600 px body, the historical behaviour of every list page.
- * - `'fill'` — fills the viewport down to the scroll pane's bottom.
+ * - `'fill'` — as tall as its header and rows, capped at the scroll pane's bottom (past it the rows scroll);
+ *   the same as `'content'` with `maxHeight: 'fill'`. It filled the pane whatever its rows until 23.10.
  * - `'100%'` — fills its flex parent.
  * - `'content'` — exactly as tall as its header and rows, up to `maxHeight`; past that the rows scroll.
  *   For widgets on a board or a record page: one row is one row high, not 600 px of nothing.

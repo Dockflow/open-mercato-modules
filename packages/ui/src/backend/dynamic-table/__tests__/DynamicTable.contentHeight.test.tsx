@@ -84,6 +84,17 @@ describe('DynamicTable height="content"', () => {
     expect(parseFloat(body(container).style.minHeight)).toBe(0)
   })
 
+  it("'fill' is as tall as its rows, capped at its scroll pane — not a screen of empty grid", () => {
+    const { container } = renderGrid({ height: 'fill' })
+    const frame = container.querySelector('.hot-container') as HTMLElement
+    expect(frame.dataset.contentHeight).toBe('true')
+    expect(frame.dataset.paneCapped).toBe('true')
+    expect(frame.style.height).toBe('')
+    expect(frame.style.maxHeight).toBe(`${window.innerHeight}px`)
+    expect(frame.className).not.toContain('flex-1')
+    expect(body(container).style.flex).toBe('0 1 auto')
+  })
+
   it('a Sheet opened from a widget gives its tables their own height back', () => {
     renderGrid({ height: '300px' }, (node) =>
       React.createElement(
