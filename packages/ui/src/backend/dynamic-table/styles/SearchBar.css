@@ -156,9 +156,16 @@
 
    One chip per live quick filter, rendered INSIDE `.hot-toolbar-actions`
    immediately before the "Clear all filters" button, so the chips and their
-   clear-all read as one group. It adds NO row: the strip scrolls horizontally
-   inside the toolbar it already sits in, so the grid's height math is
-   untouched.
+   clear-all read as one group.
+
+   A chip is ONE WHOLE LINE (owner 23.10, FMS M23.15: "ten peel wygląda bardzo
+   źle"). It used to be capped at 220px with a label that could not shrink, so a
+   long name ran out of the pill, and the strip, capped at 360px, hid the rest
+   behind a scroll with no scrollbar — chips cut mid-word. Now the label is
+   whole, only a long value is ellipsised, and on a wide table the strip wraps
+   with the toolbar (DynamicTable.v2.css) instead of clipping. A narrow pane
+   (≤720px) keeps its one-row toolbar; there the strip still scrolls (the
+   dt-grid container query in DynamicTable.v2.css).
 
    ONE form only. The saved-vs-transient two-variant chip that was drafted for
    this row was dead code — every filter reaching this component is an ad-hoc
@@ -175,11 +182,10 @@
 .hot-filter-chips {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
-  max-width: 360px;
   flex: 0 1 auto;
-  overflow-x: auto;
   scrollbar-width: none;
 }
 
@@ -194,7 +200,7 @@
   flex: 0 0 auto;
   height: 22px;
   padding: 0 4px 0 10px;
-  max-width: 220px;
+  white-space: nowrap;
   border: 1px solid var(--m3-outline-variant);
   border-radius: var(--m3-shape-full);
   background-color: var(--m3-surface-container-high);
@@ -208,6 +214,7 @@
 
 .hot-filter-chip-label {
   flex: 0 0 auto;
+  white-space: nowrap;
   color: var(--m3-on-surface);
   font-size: var(--text-caption-medium-md);
   line-height: var(--text-caption-medium-md--line-height);
@@ -216,6 +223,7 @@
 
 .hot-filter-chip-value {
   min-width: 0;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
