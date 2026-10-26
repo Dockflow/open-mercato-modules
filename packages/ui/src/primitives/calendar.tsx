@@ -1,10 +1,11 @@
 "use client"
 
 import * as React from 'react'
-import { DayPicker } from 'react-day-picker'
+import { DateLib, DayPicker } from 'react-day-picker'
 import type { DayPickerProps } from 'react-day-picker'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@open-mercato/shared/lib/utils'
+import { useOptionalT } from '@open-mercato/shared/lib/i18n/context'
 
 export type CalendarProps = DayPickerProps
 
@@ -14,9 +15,29 @@ export type CalendarProps = DayPickerProps
  * month switch, which flips it across its field and moves the ‹ › arrows away from
  * the cursor. Pass `fixedWeeks={false}` for a calendar that is not in a popover.
  */
-export function Calendar({ className, classNames, showOutsideDays = true, fixedWeeks = true, ...props }: CalendarProps) {
+export function Calendar({ className, classNames, showOutsideDays = true, fixedWeeks = true, labels, ...props }: CalendarProps) {
+  // FMS acc-v17 D6.04 (p7's GT walk 26.10): a Polish desk read today's day "Today, poniedziałek…" — the day picker's own
+  // words are English. They go through the app's dictionary when there is one; without it the calendar stays English.
+  const t = useOptionalT()
+  const word = (key: string, fallback: string) => (t ? t(key, fallback) : fallback)
+  const today = word('ui.datePicker.today', 'Today')
+  const selected = word('ui.datePicker.selected', 'selected')
+  const next = word('ui.datePicker.nextMonth', 'Go to the Next Month')
+  const previous = word('ui.datePicker.previousMonth', 'Go to the Previous Month')
+  const ownLabels: NonNullable<DayPickerProps['labels']> = {
+    labelDayButton: (date, modifiers, options, dateLib) => {
+      let label = (dateLib ?? new DateLib(options)).format(date, 'PPPP')
+      if (modifiers.today) label = `${today}, ${label}`
+      if (modifiers.selected) label = `${label}, ${selected}`
+      return label
+    },
+    labelNext: () => next,
+    labelPrevious: () => previous,
+    ...labels,
+  }
   return (
     <DayPicker
+      labels={ownLabels}
       showOutsideDays={showOutsideDays}
       fixedWeeks={fixedWeeks}
       className={cn('p-3', className)}
