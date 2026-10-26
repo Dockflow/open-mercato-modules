@@ -14,6 +14,7 @@
 
 import type { ColumnDef } from '../types/index';
 import { columnKeepsTime } from './dateTimeColumn';
+import { parseTypedDateTime } from '../../inputs/typedDate';
 import type { CoerceResult } from '../handlers/cellWrites';
 
 /** Empty in the "user cleared the cell" sense. Clearing is always allowed. */
@@ -63,8 +64,9 @@ export function coerceCellValue(value: unknown, column: ColumnDef): CoerceResult
     }
 
     case 'date': {
-      const date = value instanceof Date ? value : new Date(value as string);
-      if (Number.isNaN(date.getTime())) return { ok: false, reason: 'notCoercible' };
+      // Day first when dotted ('05.10.2026' is the 5th of October); what is not a whole date is refused, not guessed.
+      const date = parseTypedDateTime(value);
+      if (!date) return { ok: false, reason: 'notCoercible' };
       // ISO date string (YYYY-MM-DD) so a Date round-tripped through a string
       // stays the same day. LOCAL parts, not UTC: `toISOString()` would shift a
       // Warsaw midnight back to the previous day.

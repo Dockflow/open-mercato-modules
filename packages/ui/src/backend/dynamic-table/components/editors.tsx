@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { Check } from 'lucide-react';
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context';
 import { Calendar } from '../../../primitives/calendar';
-import { dateFnsLocaleFor, isoDatePlaceholderFor } from '../../inputs/dateLocale';
+import { dateFnsLocaleFor, formatTypedDate, isoDatePlaceholderFor, parseTypedDate, parseTypedDateTime, toIsoDay, typedDatePlaceholderFor } from '../../inputs/dateLocale';
 import { apiCall } from '../../utils/apiCall';
 import { markDateTimeEditor, parseLocaleNumber } from '../utils/dateTimeColumn';
 import { markPickerEditor } from '../utils/pickerColumn';
@@ -192,17 +192,23 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
     const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
     const cellRef = useRef<HTMLTextAreaElement>(null);
     const calendarRef = useRef<HTMLDivElement>(null);
-    const textValueRef = useRef(String(value ?? '')); // Track current value for click-outside handler
-
-    // Parse date value
-    const parseDate = (val: any) => {
-        if (!val) return null;
-        const date = new Date(val);
-        return isNaN(date.getTime()) ? null : date;
+    // FMS acc-v17 F3.16 (22.10): a typed 'DD.MM.RRRR' is read as that day, the cell shows its day the way the app's
+    // language writes it, and what is saved is the day as 'YYYY-MM-DD' — whatever form it was typed in. A cell left as
+    // it was saves its own value back untouched.
+    const parseDate = (val: any) => parseTypedDate(val);
+    const initialText = (() => {
+        const parsed = parseTypedDate(value);
+        return parsed ? formatTypedDate(parsed, appLocale) : String(value ?? '');
+    })();
+    const toSaved = (text: string) => {
+        if (text === initialText) return String(value ?? '');
+        const parsed = parseTypedDate(text);
+        return parsed ? toIsoDay(parsed) : text;
     };
+    const textValueRef = useRef(initialText); // Track current value for click-outside handler
 
     const [selectedDate, setSelectedDate] = useState<Date | null>(parseDate(value));
-    const [textValue, setTextValue] = useState(String(value ?? ''));
+    const [textValue, setTextValue] = useState(initialText);
 
     // Keep ref in sync with state for click-outside handler
     useEffect(() => {
@@ -217,7 +223,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
             const isOutsideCalendar = !calendarRef.current || !calendarRef.current.contains(target);
 
             if (isOutsideTextarea && isOutsideCalendar) {
-                onSave(textValueRef.current, true);
+                onSave(toSaved(textValueRef.current), true);
             }
         };
 
@@ -272,7 +278,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
         if (e.key === 'Enter' && !e.shiftKey) {
             // Save without clearing editing - navigation hook will handle clearing
             setShowCalendar(false);
-            onSave(textValue, false);
+            onSave(toSaved(textValue), false);
         } else if (e.key === 'Escape') {
             e.preventDefault();
             e.stopPropagation();
@@ -281,7 +287,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
         } else if (e.key === 'Tab') {
             // Save without clearing editing - navigation hook will handle clearing
             setShowCalendar(false);
-            onSave(textValue, false);
+            onSave(toSaved(textValue), false);
         }
     };
 
@@ -313,7 +319,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
                     // Don't save on blur - handled by click-outside or calendar selection
                 }}
                 className="hot-cell-editor hot-date-editor"
-                placeholder={t('dynamicTable.dateEditor.placeholder', isoDatePlaceholderFor(appLocale))}
+                placeholder={t('dynamicTable.dateEditor.placeholder', typedDatePlaceholderFor(appLocale))}
             />
 
             {showCalendar && (
@@ -393,22 +399,9 @@ export const DateTimeEditor: React.FC<BaseEditorProps> = ({
     const textValueRef = useRef(String(value ?? ''));
 
     const parseDateTime = (val: any): { date: Date | null; hours: number; minutes: number } => {
-        if (!val) return { date: null, hours: 0, minutes: 0 };
-        const str = String(val);
-        // Try ISO or common formats
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) {
-            return { date: d, hours: d.getHours(), minutes: d.getMinutes() };
-        }
-        // Try "YYYY-MM-DD HH:mm" format
-        const match = str.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})$/);
-        if (match) {
-            const dateOnly = new Date(match[1] + 'T00:00:00');
-            if (!isNaN(dateOnly.getTime())) {
-                return { date: dateOnly, hours: parseInt(match[2], 10), minutes: parseInt(match[3], 10) };
-            }
-        }
-        return { date: null, hours: 0, minutes: 0 };
+        // '05.10.2026 14:30' is the 5th of October (new Date read it as the 10th of May), as the save reads it.
+        const d = parseTypedDateTime(val);
+        return d ? { date: d, hours: d.getHours(), minutes: d.getMinutes() } : { date: null, hours: 0, minutes: 0 };
     };
 
     const initial = parseDateTime(value);

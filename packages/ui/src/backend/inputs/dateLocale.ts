@@ -35,3 +35,29 @@ export function isoDatePlaceholderFor(appLocale: string | null | undefined): str
   const code = String(appLocale ?? '').split('-')[0]?.toLowerCase() ?? ''
   return ISO_DATE_PLACEHOLDERS[code] ?? 'YYYY-MM-DD'
 }
+
+/**
+ * How a person in a day-first language types a date in a grid cell (FMS acc-v17 F3.16, 22.10: the Polish editor
+ * said 'RRRR-MM-DD' and a typed '21.10.2026' was never read). Languages not listed keep the ISO form.
+ */
+const DAY_FIRST_PLACEHOLDERS: Record<string, string> = {
+  pl: 'DD.MM.RRRR',
+  de: 'TT.MM.JJJJ',
+}
+
+/** The hint a typed date follows in the app's language: 'DD.MM.RRRR' in Polish, else the ISO hint. */
+export function typedDatePlaceholderFor(appLocale: string | null | undefined): string {
+  const code = String(appLocale ?? '').split('-')[0]?.toLowerCase() ?? ''
+  return DAY_FIRST_PLACEHOLDERS[code] ?? isoDatePlaceholderFor(appLocale)
+}
+
+/** The day as the app's language writes it in a cell: '21.10.2026' in a day-first language, else '2026-10-21'. */
+export function formatTypedDate(date: Date, appLocale: string | null | undefined): string {
+  const code = String(appLocale ?? '').split('-')[0]?.toLowerCase() ?? ''
+  const dd = String(date.getDate()).padStart(2, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  return DAY_FIRST_PLACEHOLDERS[code] ? `${dd}.${mm}.${date.getFullYear()}` : `${date.getFullYear()}-${mm}-${dd}`
+}
+
+export { parseTypedDate, parseTypedDateTime, toIsoDay } from './typedDate'
+

@@ -5,6 +5,8 @@ import { DatePicker } from '../DatePicker'
 
 jest.mock('@open-mercato/shared/lib/i18n/context', () => ({
   useT: () => (_key: string, fallback: string) => fallback,
+  // The calendar reads its own words through the optional translator (FMS acc-v17 D6.04).
+  useOptionalT: () => (_key: string, fallback: string) => fallback,
 }))
 
 // Radix positions through floating-ui, which never settles in jsdom (any await after

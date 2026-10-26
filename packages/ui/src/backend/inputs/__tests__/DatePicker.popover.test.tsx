@@ -6,6 +6,8 @@ import { pickCalendarSide } from '../useCalendarPopover'
 
 jest.mock('@open-mercato/shared/lib/i18n/context', () => ({
   useT: () => (_key: string, fallback: string) => fallback,
+  // The calendar reads its own words through the optional translator (FMS acc-v17 D6.04).
+  useOptionalT: () => (_key: string, fallback: string) => fallback,
 }))
 
 // A value far from today, so "opens on today's month" can never pass by accident.

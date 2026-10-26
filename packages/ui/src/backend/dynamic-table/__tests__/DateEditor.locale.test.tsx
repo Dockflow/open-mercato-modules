@@ -26,7 +26,8 @@ function renderEditor(locale: string, dict: Record<string, string>, Editor = Dat
 }
 
 describe('DateEditor — app locale', () => {
-  it('pl: Polish month, Monday first, Wyczyść / Dzisiaj, RRRR-MM-DD', () => {
+  // FMS acc-v17 F3.16: a Polish date cell is typed day first — DD.MM.RRRR (DateEditor.dayFirst.test.tsx).
+  it('pl: Polish month, Monday first, Wyczyść / Dzisiaj, DD.MM.RRRR', () => {
     renderEditor('pl', PL)
     expect(screen.getByRole('status')).toHaveTextContent('grudzień 2026')
     expect(weekdays()[0]).toBe('poniedziałek')
@@ -34,7 +35,7 @@ describe('DateEditor — app locale', () => {
     expect(screen.getByRole('button', { name: 'Wyczyść' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Dzisiaj' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull()
-    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'RRRR-MM-DD')
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'DD.MM.RRRR')
   })
 
   it('pl-PL resolves to Polish too', () => {

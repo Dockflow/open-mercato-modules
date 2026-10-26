@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '../../../primitives/calendar';
+import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context';
+import { dateFnsLocaleFor, formatTypedDate } from '../../inputs/dateLocale';
 import { useEscapeLayer } from '../hooks/useEscapeLayer';
 import { portalContainerFor } from '../utils/portalContainer';
 
@@ -36,9 +38,12 @@ function formatISODate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function formatDisplay(date: Date): string {
-  // Locale-aware short date that matches the inline editor's compact look.
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+/**
+ * The chosen day as the app's language writes it — '01.11.2026' in Polish, as the cell's own date editor shows it (FMS
+ * acc-v17 F3.21, 22.10: the filter read 'Nov 01, 2026', the browser's locale, beside a Polish grid).
+ */
+function formatDisplay(date: Date, appLocale: string | null | undefined): string {
+  return formatTypedDate(date, appLocale);
 }
 
 export const FilterDatePicker: React.FC<FilterDatePickerProps> = ({
@@ -49,6 +54,10 @@ export const FilterDatePicker: React.FC<FilterDatePickerProps> = ({
   className = '',
   zIndex = 10000,
 }) => {
+  // F3.21: the calendar in the app's language — Polish month and day names, Monday first, "Wyczyść" / "Dzisiaj" — as the
+  // cell's date editor has it (it was English beside a Polish grid).
+  const t = useT();
+  const appLocale = useLocale();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -137,6 +146,7 @@ export const FilterDatePicker: React.FC<FilterDatePickerProps> = ({
         selected={selected ?? undefined}
         defaultMonth={selected ?? undefined}
         onSelect={handleSelect}
+        locale={dateFnsLocaleFor(appLocale)}
         classNames={{
           month: 'relative space-y-4',
           month_caption: 'flex justify-center pt-1 items-center',
@@ -154,7 +164,7 @@ export const FilterDatePicker: React.FC<FilterDatePickerProps> = ({
             setOpen(false);
           }}
         >
-          Clear
+          {t('ui.datePicker.clearButton', 'Clear')}
         </button>
         <button
           type="button"
@@ -167,7 +177,7 @@ export const FilterDatePicker: React.FC<FilterDatePickerProps> = ({
             setOpen(false);
           }}
         >
-          Today
+          {t('ui.datePicker.todayButton', 'Today')}
         </button>
       </div>
     </div>
@@ -183,7 +193,7 @@ export const FilterDatePicker: React.FC<FilterDatePickerProps> = ({
         onClick={() => setOpen((o) => !o)}
       >
         <span className={selected ? '' : 'hot-config-filter-date-placeholder'}>
-          {selected ? formatDisplay(selected) : placeholder}
+          {selected ? formatDisplay(selected, appLocale) : placeholder}
         </span>
         <CalendarIcon className="w-3.5 h-3.5 text-[var(--m3-on-surface-variant)]" />
       </button>
