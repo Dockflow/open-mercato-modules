@@ -3,6 +3,7 @@ import { useCellStore, useCellState } from '../hooks/index';
 import { getCellRenderer } from './renderers';
 import { getCellEditor } from './editors';
 import { ColumnDef } from '../types/index';
+import { useT } from '@open-mercato/shared/lib/i18n/context';
 import { conditionalFormatClassName } from '../utils/conditionalFormat';
 import type { CompiledConditionalFormats } from '../utils/conditionalFormat';
 
@@ -54,6 +55,51 @@ export interface CellProps {
    * compile step exists.
    */
   compiledFormats?: CompiledConditionalFormats;
+}
+
+/** The plural form of a comment count: one, few (2–4, not 12–14 — Polish) or many. */
+export function commentCountForm(n: number): 'one' | 'few' | 'many' {
+  if (n === 1) return 'one';
+  const tens = n % 100;
+  const units = n % 10;
+  return units >= 2 && units <= 4 && (tens < 12 || tens > 14) ? 'few' : 'many';
+}
+
+/**
+ * FMS acc-v17 D2.05 (p7's GT walk 26.10): the comment marks in the screen's language — a Polish desk read "Add a comment"
+ * and "3 comments". Components of their own, rendered only where a mark shows, so a plain cell reads no context.
+ */
+const COMMENT_ICON = (
+  <svg width="15" height="14" viewBox="0 0 15 14" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7.29167 5.95833H7.29833M9.95833 5.95833H9.965M4.625 5.95833H4.63167M13.9583 9.95833C13.9583 10.312 13.8179 10.6511 13.5678 10.9011C13.3178 11.1512 12.9786 11.2917 12.625 11.2917H3.84367C3.49007 11.2917 3.15099 11.4323 2.901 11.6823L1.433 13.1503C1.3668 13.2165 1.28247 13.2616 1.19066 13.2798C1.09885 13.2981 1.00369 13.2887 0.917205 13.2529C0.830722 13.2171 0.756802 13.1564 0.70479 13.0786C0.652779 13.0008 0.625012 12.9093 0.625 12.8157V1.95833C0.625 1.60471 0.765476 1.26557 1.01552 1.01552C1.26557 0.765476 1.60471 0.625 1.95833 0.625H12.625C12.9786 0.625 13.3178 0.765476 13.5678 1.01552C13.8179 1.26557 13.9583 1.60471 13.9583 1.95833V9.95833Z" />
+  </svg>
+);
+
+function CommentAddIndicator({ hoverOnly }: { hoverOnly: boolean }) {
+  const t = useT();
+  // The HOVER-only variant does not get the cell's reserved right gutter (see the `:has()` rule in DynamicTable.v2.css).
+  // Reserving it on hover would re-ellipsize the value under the pointer, so moving across a row would make every
+  // cell's text twitch. It floats on its own chip over the tail of the value instead.
+  return (
+    <span
+      className={`cell-comment-indicator cell-comment-indicator-ghost${hoverOnly ? ' cell-comment-indicator-hover' : ''}`}
+      data-no-row-click
+      data-comment-add="true"
+      title={t('dynamicTable.comment.addHint', 'Add a comment (Shift+F2)')}
+      aria-label={t('dynamicTable.comment.add', 'Add a comment')}
+    >
+      {COMMENT_ICON}
+    </span>
+  );
+}
+
+function CommentCountIndicator({ count }: { count: number }) {
+  const t = useT();
+  return (
+    <span className="cell-comment-indicator" data-no-row-click title={t(`dynamicTable.comment.count.${commentCountForm(count)}`, count === 1 ? '{count} comment' : '{count} comments', { count })}>
+      {COMMENT_ICON}
+    </span>
+  );
 }
 
 const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, ariaColIndex, stickyLeft, stickyRight, frozenRightEdge, onCellSave, onCellContextMenu, annotationColor, commentCount, commentsEnabled, colorAbove, colorBelow, colorLeft, colorRight, compiledFormats }) => {
@@ -259,29 +305,10 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, ariaColIndex, sti
 
           Never while editing: an open editor owns the cell. */}
       {commentsEnabled && !commentCount && (isSoleSelectedCell || state.isHovered) && !state.isEditing && (
-        <span
-          // The HOVER-only variant does not get the cell's reserved right
-          // gutter (see the `:has()` rule in DynamicTable.v2.css). Reserving it
-          // on hover would re-ellipsize the value under the pointer, so moving
-          // across a row would make every cell's text twitch. It floats on its
-          // own chip over the tail of the value instead.
-          className={`cell-comment-indicator cell-comment-indicator-ghost${isSoleSelectedCell ? '' : ' cell-comment-indicator-hover'}`}
-          data-no-row-click
-          data-comment-add="true"
-          title="Add a comment (Shift+F2)"
-          aria-label="Add a comment"
-        >
-          <svg width="15" height="14" viewBox="0 0 15 14" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M7.29167 5.95833H7.29833M9.95833 5.95833H9.965M4.625 5.95833H4.63167M13.9583 9.95833C13.9583 10.312 13.8179 10.6511 13.5678 10.9011C13.3178 11.1512 12.9786 11.2917 12.625 11.2917H3.84367C3.49007 11.2917 3.15099 11.4323 2.901 11.6823L1.433 13.1503C1.3668 13.2165 1.28247 13.2616 1.19066 13.2798C1.09885 13.2981 1.00369 13.2887 0.917205 13.2529C0.830722 13.2171 0.756802 13.1564 0.70479 13.0786C0.652779 13.0008 0.625012 12.9093 0.625 12.8157V1.95833C0.625 1.60471 0.765476 1.26557 1.01552 1.01552C1.26557 0.765476 1.60471 0.625 1.95833 0.625H12.625C12.9786 0.625 13.3178 0.765476 13.5678 1.01552C13.8179 1.26557 13.9583 1.60471 13.9583 1.95833V9.95833Z" />
-          </svg>
-        </span>
+        <CommentAddIndicator hoverOnly={!isSoleSelectedCell} />
       )}
       {commentCount != null && commentCount > 0 && (
-        <span className="cell-comment-indicator" data-no-row-click title={`${commentCount} comment${commentCount > 1 ? 's' : ''}`}>
-          <svg width="15" height="14" viewBox="0 0 15 14" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M7.29167 5.95833H7.29833M9.95833 5.95833H9.965M4.625 5.95833H4.63167M13.9583 9.95833C13.9583 10.312 13.8179 10.6511 13.5678 10.9011C13.3178 11.1512 12.9786 11.2917 12.625 11.2917H3.84367C3.49007 11.2917 3.15099 11.4323 2.901 11.6823L1.433 13.1503C1.3668 13.2165 1.28247 13.2616 1.19066 13.2798C1.09885 13.2981 1.00369 13.2887 0.917205 13.2529C0.830722 13.2171 0.756802 13.1564 0.70479 13.0786C0.652779 13.0008 0.625012 12.9093 0.625 12.8157V1.95833C0.625 1.60471 0.765476 1.26557 1.01552 1.01552C1.26557 0.765476 1.60471 0.625 1.95833 0.625H12.625C12.9786 0.625 13.3178 0.765476 13.5678 1.01552C13.8179 1.26557 13.9583 1.60471 13.9583 1.95833V9.95833Z" />
-          </svg>
-        </span>
+        <CommentCountIndicator count={commentCount} />
       )}
       {/* MARCHING ANTS — the outline that says what is on the clipboard.
           A real element rather than a `::before`, because both of this cell's

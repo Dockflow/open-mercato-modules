@@ -29,6 +29,11 @@ const ANNOTATION_COLORS = [
   { value: 'purple', label: 'Purple', bg: 'var(--m3-annotation-purple)' },
 ] as const;
 
+/** The palette's colour names in the screen's language (FMS acc-v17 D2.05: 'None/Pink/Orange' showed in a Polish desk). */
+function paletteLabel(t: ReturnType<typeof useT>, item: (typeof ANNOTATION_COLORS)[number]): string {
+  return t(`dynamicTable.palette.${item.value ?? 'none'}`, item.label);
+}
+
 const MENTION_PATTERN = /@\[([^\]]+)\]\(([^)]+)\)/g;
 
 /** Who the note is for — see `packages/annotations` (workshop B8c). */
@@ -775,7 +780,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
                   background: item.bg,
                   border: item.value === null ? '1px dashed var(--m3-outline-faint)' : undefined,
                 }}
-                title={item.label}
+                title={paletteLabel(t, item)}
               >
                 {item.value === null && selectedColor === null ? (
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -861,7 +866,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
                   background: item.bg,
                   border: item.value === null ? '1px dashed var(--m3-outline-faint)' : undefined,
                 }}
-                title={item.label}
+                title={paletteLabel(t, item)}
               >
                 {item.value === null && selectedColor === null ? (
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
