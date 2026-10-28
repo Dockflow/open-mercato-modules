@@ -3810,12 +3810,13 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   // -------------------- RENDER --------------------
 
   // The settings menu (export, row height, fullscreen): among the toolbar's actions, or, when the app asks
-  // for it, at the end of the tabs row after the pagination — so it is not taken for one of the page's
-  // action buttons. A split-view host keeps its own toolbar menus.
+  // for it, as a settings button apart from the page's action buttons — at the end of the tabs row after the
+  // pagination, or, for a table without a tabs row, at the very end of the toolbar behind a divider (a roles
+  // matrix whose only action is "Save"). A split-view host keeps its own toolbar menus.
   const tableDefaults = useContext(DynamicTableDefaultsContext)
-  const tableMenuInTabsRow = (tableMenuPlacement ?? tableDefaults.tableMenuPlacement) === 'pagination'
+  const tableMenuApart = (tableMenuPlacement ?? tableDefaults.tableMenuPlacement) === 'pagination'
     && !hideToolbar && !expandToolbarActions && !displayHost
-    && (!hidePerspectiveTabs || (!!pagination && !hidePagination))
+  const tableMenuInTabsRow = tableMenuApart && (!hidePerspectiveTabs || (!!pagination && !hidePagination))
   const tableMenu = (look: 'more' | 'settings') => (
     <ToolbarOverflow
       onExport={hideExportButton ? undefined : handleExportAll}
@@ -4137,13 +4138,14 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               {displayHost && (
                 <TableSettingsMenu densityTableKey={tableId} toggles={displayToggles} showDensity={!hideDensityControl} />
               )}
-              {!tableMenuInTabsRow && tableMenu('more')}
+              {!tableMenuApart && tableMenu('more')}
               </>
             )}
           </div>
 
           {/* Custom slot: top bar end */}
           {topBarEnd}
+          {tableMenuApart && !tableMenuInTabsRow && <div className="hot-toolbar-menu-end">{tableMenu('settings')}</div>}
         </div>
       )}
 

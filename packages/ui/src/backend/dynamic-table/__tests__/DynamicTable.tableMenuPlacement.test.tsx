@@ -84,9 +84,14 @@ describe('the table settings menu', () => {
     expect(inToolbar()).toBe(true)
   })
 
-  it('stays in the toolbar when there is no tabs row to hold it', () => {
-    mount({ tableMenuPlacement: 'pagination', hidePerspectiveTabs: true, hidePagination: true })
+  it('without a tabs row, is the toolbar\'s last item as a settings button, after the page\'s own buttons', () => {
+    const save = React.createElement('button', { type: 'button', 'data-page-action': '' }, 'Zapisz zmiany')
+    mount({ tableMenuPlacement: 'pagination', hidePerspectiveTabs: true, hidePagination: true, topBarEnd: save })
     expect(inToolbar()).toBe(true)
-    expect(menu()?.getAttribute('data-toolbar-overflow-look')).toBe('more')
+    expect(menu()?.getAttribute('data-toolbar-overflow-look')).toBe('settings')
+    expect(menu()?.closest('.hot-toolbar-menu-end')).not.toBeNull()
+    const action = document.querySelector('[data-page-action]') as HTMLElement
+    expect(!!(action.compareDocumentPosition(menu() as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true)
+    expect(document.querySelectorAll('[data-toolbar-overflow]')).toHaveLength(1)
   })
 })

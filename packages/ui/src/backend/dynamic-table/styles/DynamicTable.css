@@ -1745,6 +1745,17 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
     margin-left: 4px;
 }
 
+/* The same menu on a table without a tabs row: the toolbar's last item, behind a divider, apart from the
+   page's own buttons. */
+.hot-toolbar-menu-end {
+    display: flex;
+    align-items: center;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid var(--m3-outline-faint);
+    align-self: stretch;
+}
+
 /* Top Tabs Variant */
 .hot-top-tabs {
     display: flex;
