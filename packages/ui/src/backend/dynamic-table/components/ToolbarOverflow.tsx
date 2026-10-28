@@ -15,7 +15,7 @@
 
 import * as React from 'react'
 import ReactDOM from 'react-dom'
-import { Check, Download, Maximize2, MoreHorizontal } from 'lucide-react'
+import { Check, Download, Maximize2, MoreHorizontal, SlidersHorizontal } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { DENSITY_LEVELS, type DensityLevel } from '../types/density'
 import { setDensityPreference, useDensityPreference } from '../hooks/useDensityPreference'
@@ -47,6 +47,11 @@ export interface ToolbarOverflowProps {
   onFullscreen?: () => void
   /** Host-supplied rows appended below the table's own. */
   extras?: React.ReactNode
+  /**
+   * `more` (default): the `⋯` button among the toolbar's actions. `settings`: a sliders button titled
+   * "Table settings", for the menu placed after the pagination (`tableMenuPlacement: 'pagination'`).
+   */
+  look?: 'more' | 'settings'
 }
 
 const MENU_WIDTH = 216
@@ -72,6 +77,7 @@ export const ToolbarOverflow: React.FC<ToolbarOverflowProps> = ({
   densityTableKey,
   onFullscreen,
   extras,
+  look = 'more',
 }) => {
   const t = useT()
   const [open, setOpen] = React.useState(false)
@@ -161,13 +167,14 @@ export const ToolbarOverflow: React.FC<ToolbarOverflowProps> = ({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        title={t('dynamicTable.toolbar.more', 'More')}
-        aria-label={t('dynamicTable.toolbar.more', 'More table actions')}
+        title={look === 'settings' ? t('dynamicTable.toolbar.tableSettings', 'Table settings') : t('dynamicTable.toolbar.more', 'More')}
+        aria-label={look === 'settings' ? t('dynamicTable.toolbar.tableSettings', 'Table settings') : t('dynamicTable.toolbar.more', 'More table actions')}
         aria-expanded={open}
         className="hot-toolbar-overflow-btn"
         data-toolbar-overflow=""
+        data-toolbar-overflow-look={look}
       >
-        <MoreHorizontal className="w-4 h-4" />
+        {look === 'settings' ? <SlidersHorizontal className="w-4 h-4" /> : <MoreHorizontal className="w-4 h-4" />}
       </button>
 
       {open && typeof document !== 'undefined' && ReactDOM.createPortal(

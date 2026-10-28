@@ -847,6 +847,16 @@ export interface TableUIConfig {
    */
   toolbarOverflowExtras?: React.ReactNode;
   /**
+   * Where the table's settings menu (export, row height, fullscreen) sits.
+   *
+   * `toolbar` (default) keeps the `⋯` button among the toolbar's actions. `pagination` moves it to the end
+   * of the tabs row, after the page size, as a settings button, so it is not taken for one of the page's
+   * action buttons (GT, 28.10: "przenieśmy ją za paginację … nie miesza się z przyciskami, które wykonują
+   * jakąś akcję"). Without a tabs row it stays in the toolbar. An app sets it for all its tables with
+   * `DynamicTableDefaultsProvider`.
+   */
+  tableMenuPlacement?: 'toolbar' | 'pagination';
+  /**
    * DEVELOPER override for tables whose structure demands a fixed density (a
    * two-row summary strip, a fixed-height drawer sub-table). Read-only: it wins
    * for THIS table and is never persisted, so it cannot silently become the

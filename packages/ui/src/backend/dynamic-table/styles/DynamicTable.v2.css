@@ -130,6 +130,13 @@
   align-self: flex-end;
   margin-bottom: -2px;
 }
+/* The table's settings menu after the page size (tableMenuPlacement: 'pagination'), on the pagination's line. */
+.hot-appearance-v2.hot-container .hot-tabs-row .hot-tabs-row-menu {
+  display: flex;
+  align-self: flex-end;
+  margin-bottom: -2px;
+  margin-left: 8px;
+}
 
 /* Grouped-actions (bulk) bar — collapse animation. The bar is kept mounted and
    the wrapper animates its height via the grid-rows 0fr↔1fr trick (animatable,
