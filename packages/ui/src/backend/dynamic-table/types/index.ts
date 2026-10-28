@@ -852,8 +852,8 @@ export interface TableUIConfig {
    * `toolbar` (default) keeps the `⋯` button among the toolbar's actions. `pagination` moves it to the end
    * of the tabs row, after the page size, as a settings button, so it is not taken for one of the page's
    * action buttons (GT, 28.10: "przenieśmy ją za paginację … nie miesza się z przyciskami, które wykonują
-   * jakąś akcję"). Without a tabs row it stays in the toolbar. An app sets it for all its tables with
-   * `DynamicTableDefaultsProvider`.
+   * jakąś akcję"). Without a tabs row it is the toolbar's last item, after `topBarEnd`, behind a divider. An app
+   * sets it for all its tables with `DynamicTableDefaultsProvider`.
    */
   tableMenuPlacement?: 'toolbar' | 'pagination';
   /**
