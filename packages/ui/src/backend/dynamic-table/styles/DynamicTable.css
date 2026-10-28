@@ -1738,6 +1738,13 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
     flex: 1;
 }
 
+/* The table's settings menu after the pagination (tableMenuPlacement: 'pagination'). */
+.hot-tabs-row-menu {
+    display: flex;
+    align-items: center;
+    margin-left: 4px;
+}
+
 /* Top Tabs Variant */
 .hot-top-tabs {
     display: flex;

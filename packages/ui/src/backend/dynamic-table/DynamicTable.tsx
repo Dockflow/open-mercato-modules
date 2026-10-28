@@ -15,6 +15,7 @@ import React, {
 import { flushSync } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { CONTENT_MAX_HEIGHT, DynamicTableSizingContext, type DynamicTableHeight } from './sizing';
+import { DynamicTableDefaultsContext } from './defaults';
 
 import { createCellStore, CellStore } from './store/index';
 import {
@@ -682,6 +683,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     hideDensityControl = false,
     expandToolbarActions = false,
     toolbarOverflowExtras,
+    tableMenuPlacement,
     densityLevel: densityLevelOverride,
     viewModes,
     onViewModeChange,
@@ -3807,6 +3809,25 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
 
   // -------------------- RENDER --------------------
 
+  // The settings menu (export, row height, fullscreen): among the toolbar's actions, or, when the app asks
+  // for it, at the end of the tabs row after the pagination — so it is not taken for one of the page's
+  // action buttons. A split-view host keeps its own toolbar menus.
+  const tableDefaults = useContext(DynamicTableDefaultsContext)
+  const tableMenuInTabsRow = (tableMenuPlacement ?? tableDefaults.tableMenuPlacement) === 'pagination'
+    && !hideToolbar && !expandToolbarActions && !displayHost
+    && (!hidePerspectiveTabs || (!!pagination && !hidePagination))
+  const tableMenu = (look: 'more' | 'settings') => (
+    <ToolbarOverflow
+      onExport={hideExportButton ? undefined : handleExportAll}
+      exportDisabled={isExportingAll}
+      showDensity={!hideDensityControl && !displayHost}
+      densityTableKey={tableId}
+      onFullscreen={enableFullscreen && !isFullscreen ? handleEnterFullscreen : undefined}
+      extras={toolbarOverflowExtras}
+      look={look}
+    />
+  )
+
   // The host's sizing (a board slot) wins over the table's own: a registered list page shown as a
   // widget asks for 'fill', and its slot wants 'content'.
   const sizing = useContext(DynamicTableSizingContext)
@@ -4116,14 +4137,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               {displayHost && (
                 <TableSettingsMenu densityTableKey={tableId} toggles={displayToggles} showDensity={!hideDensityControl} />
               )}
-              <ToolbarOverflow
-                onExport={hideExportButton ? undefined : handleExportAll}
-                exportDisabled={isExportingAll}
-                showDensity={!hideDensityControl && !displayHost}
-                densityTableKey={tableId}
-                onFullscreen={enableFullscreen && !isFullscreen ? handleEnterFullscreen : undefined}
-                extras={toolbarOverflowExtras}
-              />
+              {!tableMenuInTabsRow && tableMenu('more')}
               </>
             )}
           </div>
@@ -4178,6 +4192,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           {pagination && !hidePagination && (
             <TablePagination pagination={pagination} />
           )}
+          {tableMenuInTabsRow && <div className="hot-tabs-row-menu">{tableMenu('settings')}</div>}
         </div>
       )}
 

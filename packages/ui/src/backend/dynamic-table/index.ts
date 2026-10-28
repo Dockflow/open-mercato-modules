@@ -2,6 +2,7 @@
 
 export { default as DynamicTable } from './DynamicTable';
 export { DynamicTableSizingContext, DynamicTableSizingProvider, CONTENT_MAX_HEIGHT, PANE_CONTENT_SIZING } from './sizing';
+export { DynamicTableDefaultsContext, DynamicTableDefaultsProvider, type DynamicTableDefaults, type DynamicTableMenuPlacement } from './defaults';
 export type { DynamicTableHeight, DynamicTableSizing } from './sizing';
 export { DynamicTableBadge } from './components/renderers';
 export { default as TableSkeleton } from './components/TableSkeleton';

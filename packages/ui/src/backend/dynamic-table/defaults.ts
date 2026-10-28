@@ -1,0 +1,16 @@
+import { createContext } from 'react'
+
+/** Where a table's settings menu (export, row height, fullscreen) sits; see `DynamicTableProps.tableMenuPlacement`. */
+export type DynamicTableMenuPlacement = 'toolbar' | 'pagination'
+
+/** An app's defaults for the props every DynamicTable inside it leaves unset. */
+export type DynamicTableDefaults = {
+  tableMenuPlacement?: DynamicTableMenuPlacement
+}
+
+/**
+ * Lets an app set these once (around its backend layout) instead of on every table. A table's own prop
+ * still wins.
+ */
+export const DynamicTableDefaultsContext = createContext<DynamicTableDefaults>({})
+export const DynamicTableDefaultsProvider = DynamicTableDefaultsContext.Provider
