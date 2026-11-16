@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "fuse.js": "^7.1.0",
-    "undici": "^7.25.0"
+    "undici": "^7.30.1"
   },
   "peerDependencies": {
     "@freighttech/ui": "^0.13.0 || ^0.14.0",
