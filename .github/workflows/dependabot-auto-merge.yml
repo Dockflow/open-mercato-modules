@@ -1,0 +1,17 @@
+name: Dependabot Auto-Merge
+
+on: pull_request
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    uses: Dockflow/infrastructure/.github/workflows/dependabot-auto-merge.yml@main
+    with:
+      runner: ubuntu-latest
+    secrets:
+      GH_DEPLOY_APP_ID: ${{ secrets.GH_DEPLOY_APP_ID }}
+      GH_DEPLOY_APP_PRIVATE_KEY: ${{ secrets.GH_DEPLOY_APP_PRIVATE_KEY }}
