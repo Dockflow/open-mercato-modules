@@ -1,0 +1,138 @@
+name: Dependabot Auto-Merge
+
+# Copy of Dockflow/infrastructure/.github/workflows/dependabot-auto-merge.yml: a public
+# repository cannot call a reusable workflow from a private one.
+on: pull_request
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+
+      # Auto-merge runs as whoever enabled it, and a GITHUB_TOKEN merge starts no
+      # workflow run — the bump would land unbuilt. An App token is a real identity.
+      # `secrets` is unavailable to `if:`, hence the env round-trip.
+      - name: Decide which identity merges
+        id: identity
+        env:
+          APP_ID: ${{ secrets.GH_DEPLOY_APP_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_ID:-}" ]; then
+            echo "use_app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "use_app=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GH_DEPLOY_APP_ID arrived empty. A dependabot-triggered run reads the Dependabot secret store, not the Actions one, so an Actions-only secret is empty here even though the caller passes it. Define both secrets under Settings > Secrets > Dependabot to merge as the App. Until then this merges with GITHUB_TOKEN, which starts no workflow run; the heal step above rebuilds a default branch left unbuilt that way."
+          fi
+
+      - name: Mint an installation token for this repository
+        id: app_token
+        if: steps.identity.outputs.use_app == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: Iv23liafAZSFwfbJIeq6  # dockflow-deployer
+          private-key: ${{ secrets.GH_DEPLOY_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      # A GITHUB_TOKEN merge starts no workflow run, so a bump can reach the default
+      # branch unbuilt and then ride into production attached to the next unrelated
+      # merge. This stands in for the push event that never fired.
+      #
+      # It heals the PREVIOUS such merge rather than this PR's own: auto-merge is
+      # armed below and lands only once CI passes, and blocking here to wait for it
+      # would hold a self-hosted runner while the CI it waits on needs one - which
+      # deadlocks the nightly dependabot burst outright. Dependabot opens PRs often
+      # enough that a heal-on-next-run closes the gap without that risk.
+      #
+      # continue-on-error: a caller that has not granted `actions: write` must still
+      # get its merge. The dispatch is a repair, never a gate.
+      - name: Build the default branch if a token-merge left it unbuilt
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          github-token: '${{ steps.app_token.outputs.token || secrets.GITHUB_TOKEN }}'
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: meta } = await github.rest.repos.get({ owner, repo });
+            const branch = meta.default_branch;
+            const { data: head } = await github.rest.repos.getCommit({ owner, repo, ref: branch });
+            const sha = head.sha;
+
+            const { data: listed } = await github.rest.actions.listRepoWorkflows({
+              owner, repo, per_page: 100,
+            });
+
+            for (const wf of listed.workflows) {
+              if (wf.state !== 'active') continue;
+
+              // Whether a workflow builds the default branch is read from what it has
+              // actually done, not from parsing its YAML triggers - the run history is
+              // the authority and cannot disagree with itself.
+              const { data: pushed } = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: wf.id, branch, event: 'push', per_page: 1,
+              });
+              if (pushed.total_count === 0) continue;
+
+              // Any run at all, in any state or conclusion. Keying on success would
+              // re-dispatch a genuinely failing build on every dependabot PR.
+              const { data: forSha } = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: wf.id, head_sha: sha, per_page: 1,
+              });
+              if (forSha.total_count > 0) continue;
+
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner, repo, workflow_id: wf.id, ref: branch,
+                });
+                core.notice(`Dispatched ${wf.name} for ${branch} ${sha.slice(0, 8)}, which no run covered.`);
+              } catch (err) {
+                core.notice(`Could not dispatch ${wf.name}: ${err.message}`);
+              }
+            }
+
+      # Not every self-hosted runner carries a gh binary, so these calls go through octokit.
+      - name: Approve and auto-merge minor and patch updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        uses: actions/github-script@v9
+        with:
+          github-token: '${{ steps.app_token.outputs.token || secrets.GITHUB_TOKEN }}'
+          script: |
+            const pr = context.payload.pull_request;
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              event: 'APPROVE',
+            });
+            try {
+              await github.graphql(
+                `mutation($id: ID!) {
+                   enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: MERGE }) {
+                     clientMutationId
+                   }
+                 }`,
+                { id: pr.node_id },
+              );
+            } catch (err) {
+              // GitHub will not arm auto-merge on a branch with no required checks;
+              // such a repo has chosen to take these bumps without waiting for CI.
+              if (!/clean status|protected branch rules not configured/i.test(err.message)) throw err;
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                merge_method: 'merge',
+              });
+            }
