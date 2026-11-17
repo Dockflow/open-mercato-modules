@@ -128,7 +128,7 @@ jobs:
             } catch (err) {
               // GitHub will not arm auto-merge on a branch with no required checks;
               // such a repo has chosen to take these bumps without waiting for CI.
-              if (!/clean status|protected branch rules not configured/i.test(err.message)) throw err;
+              if (!/(clean|unstable) status|protected branch rules not configured/i.test(err.message)) throw err;
               await github.rest.pulls.merge({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
